@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/lib/password";
 
 const prisma = new PrismaClient();
+
+// 시드 전용 합성 비밀번호 — 실제 계정에 사용되지 않으며 로컬 개발 DB에만 존재합니다.
+const SEED_PASSWORD = "seed-dev-only-Passw0rd!";
 
 async function findOrCreateCustomer(data: {
   customerName: string;
@@ -19,6 +23,8 @@ async function findOrCreateCustomer(data: {
 }
 
 async function main() {
+  const passwordHash = await hashPassword(SEED_PASSWORD);
+
   const manager = await prisma.salesRep.upsert({
     where: { empNo: "S2026001" },
     update: {},
@@ -28,6 +34,8 @@ async function main() {
       email: "test-manager@example.com",
       department: "영업1팀",
       position: "부장",
+      passwordHash,
+      role: "MANAGER",
       status: "ACTIVE",
     },
   });
@@ -42,6 +50,8 @@ async function main() {
       department: "영업1팀",
       position: "대리",
       managerId: manager.repId,
+      passwordHash,
+      role: "SALES_REP",
       status: "ACTIVE",
     },
   });
@@ -56,6 +66,8 @@ async function main() {
       department: "영업1팀",
       position: "사원",
       managerId: manager.repId,
+      passwordHash,
+      role: "SALES_REP",
       status: "ACTIVE",
     },
   });
