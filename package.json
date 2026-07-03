@@ -21,6 +21,9 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@tailwindcss/postcss": "^4.3.2",
@@ -44,6 +47,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.9"

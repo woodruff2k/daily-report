@@ -112,3 +112,15 @@ migrate-dev:
 .PHONY: db-studio
 db-studio:
 	npx prisma studio
+
+.PHONY: db-up
+db-up:
+	docker compose up -d
+
+.PHONY: db-down
+db-down:
+	docker compose down
+
+.PHONY: db-seed
+db-seed:
+	npx prisma db seed
