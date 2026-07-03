@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────
+// Enums
+// ──────────────────────────────
+
+enum RepStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum VisitType {
+  VISIT   // 방문
+  CALL    // 전화
+  ONLINE  // 온라인
+}
+
+enum ProblemStatus {
+  OPEN
+  CLOSED
+}
+
+// ──────────────────────────────
+// Models
+// ──────────────────────────────
+
+model SalesRep {
+  repId      BigInt    @id @default(autoincrement()) @map("rep_id")
+  empNo      String    @unique @map("emp_no")
+  name       String
+  email      String    @unique
+  department String?
+  position   String?
+  managerId  BigInt?   @map("manager_id")
+  status     RepStatus @default(ACTIVE)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // 자기참조: 상급자(manager) ↔ 부하(subordinates)
+  manager      SalesRep?  @relation("ManagerSubordinate", fields: [managerId], references: [repId])
+  subordinates SalesRep[] @relation("ManagerSubordinate")
+
+  dailyReports      DailyReport[]
+  assignedCustomers Customer[]
+  comments          ReportComment[]
+
+  @@map("sales_rep")
+}
+
+model Customer {
+  customerId    BigInt    @id @default(autoincrement()) @map("customer_id")
+  customerName  String    @map("customer_name")
+  companyName   String?   @map("company_name")
+  phone         String?
+  email         String?
+  address       String?
+  grade         String?
+  assignedRepId BigInt?   @map("assigned_rep_id")
+  status        RepStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  assignedRep SalesRep?       @relation(fields: [assignedRepId], references: [repId])
+  visits      VisitRecord[]
+  problems    ReportProblem[]
+  plans       ReportPlan[]
+
+  @@map("customer")
+}
+
+model DailyReport {
+  reportId    BigInt       @id @default(autoincrement()) @map("report_id")
+  repId       BigInt       @map("rep_id")
+  reportDate  DateTime     @map("report_date") @db.Date
+  status      ReportStatus @default(DRAFT)
+  submittedAt DateTime?    @map("submitted_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  rep      SalesRep        @relation(fields: [repId], references: [repId])
+  visits   VisitRecord[]
+  problems ReportProblem[]
+  plans    ReportPlan[]
+  comments ReportComment[]
+
+  // FR-03: 사원 + 보고일자 유일 제약
+  @@unique([repId, reportDate])
+  @@map("daily_report")
+}
+
+model VisitRecord {
+  visitId    BigInt    @id @default(autoincrement()) @map("visit_id")
+  reportId   BigInt    @map("report_id")
+  customerId BigInt    @map("customer_id")
+  visitTime  String?   @map("visit_time") // HH:mm
+  visitType  VisitType @map("visit_type")
+  content    String
+  result     String?
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  report   DailyReport @relation(fields: [reportId], references: [reportId])
+  customer Customer    @relation(fields: [customerId], references: [customerId])
+
+  @@map("visit_record")
+}
+
+model ReportProblem {
+  problemId  BigInt        @id @default(autoincrement()) @map("problem_id")
+  reportId   BigInt        @map("report_id")
+  customerId BigInt?       @map("customer_id") // 선택
+  content    String
+  status     ProblemStatus @default(OPEN)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  report   DailyReport @relation(fields: [reportId], references: [reportId])
+  customer Customer?   @relation(fields: [customerId], references: [customerId])
+
+  @@map("report_problem")
+}
+
+model ReportPlan {
+  planId      BigInt    @id @default(autoincrement()) @map("plan_id")
+  reportId    BigInt    @map("report_id")
+  customerId  BigInt?   @map("customer_id") // 선택
+  plannedDate DateTime? @map("planned_date") @db.Date // 선택
+  content     String
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  report   DailyReport @relation(fields: [reportId], references: [reportId])
+  customer Customer?   @relation(fields: [customerId], references: [customerId])
+
+  @@map("report_plan")
+}
+
+model ReportComment {
+  commentId       BigInt   @id @default(autoincrement()) @map("comment_id")
+  reportId        BigInt   @map("report_id")
+  commenterId     BigInt   @map("commenter_id")
+  parentCommentId BigInt?  @map("parent_comment_id") // 선택 (대댓글)
+  content         String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  report    DailyReport     @relation(fields: [reportId], references: [reportId])
+  commenter SalesRep        @relation(fields: [commenterId], references: [repId])
+
+  // 자기참조: 부모 댓글 ↔ 대댓글(replies)
+  parent  ReportComment?  @relation("CommentReplies", fields: [parentCommentId], references: [commentId])
+  replies ReportComment[] @relation("CommentReplies")
+
+  @@map("report_comment")
+}
