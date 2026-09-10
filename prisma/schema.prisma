@@ -2,6 +2,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// prisma / @prisma/client 는 6.19.3 으로 정확히 고정되어 있다. 7.x 로 올리면 안 된다.
+//
+// Prisma 7 은 아래 datasource 블록의 url(그리고 directUrl, shadowDatabaseUrl)을
+// 폐기하고, DB 접속 설정을 prisma.config.ts 로 옮겼다. 또한 CLI 가 .env 를
+// 자동으로 읽지 않게 되어 prisma.config.ts 에서 dotenv 를 직접 로드해야 하고,
+// package.json#prisma 의 seed 설정도 같은 파일로 이관해야 한다.
+//
+// 즉 7.x 업그레이드는 버전만 올려서 되는 작업이 아니라 설정 파일 도입이 선행되어야 한다.
+// 올릴 때는 별도 이슈로 다룬다. (배경: Issue #28, PR #22)
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
