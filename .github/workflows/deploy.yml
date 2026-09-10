@@ -10,11 +10,11 @@ on:
   #   branches: [main]
 
 env:
-  PROJECT_ID: "370670066576"
+  PROJECT_ID: "fluid-skyline-430301-d0"
   REGION: asia-northeast3
   SERVICE: daily-report
   REGISTRY: asia-northeast3-docker.pkg.dev
-  IMAGE: asia-northeast3-docker.pkg.dev/370670066576/daily-report/app
+  IMAGE: asia-northeast3-docker.pkg.dev/fluid-skyline-430301-d0/daily-report/app
 
 jobs:
   lint-and-test:
