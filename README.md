@@ -76,6 +76,16 @@ npm run test:coverage    # 커버리지 측정
 npx vitest run <파일경로>  # 단일 테스트
 ```
 
+자주 쓰는 명령은 make 타깃으로도 감싸 두었다.
+
+```bash
+make dev            # npm run dev
+make lint           # npm run lint
+make lint-fix       # npm run lint:fix
+make test           # npm test
+make test-coverage  # npm run test:coverage
+```
+
 커밋 시 husky와 lint-staged가 변경된 TypeScript 파일에 ESLint를 자동 실행한다.
 
 ### 데이터베이스
@@ -92,12 +102,22 @@ make migrate-dev  # 마이그레이션 생성 및 적용 (dev)
 ### Docker · 배포
 
 ```bash
-make build        # 이미지 빌드
-make run          # 로컬 컨테이너 실행 (.env.local 필요)
-make deploy-prod  # 빌드 → 푸시 → Cloud Run 배포
-make logs         # Cloud Run 로그 조회
-make status       # 서비스 상태 조회
-make rollback     # 이전 리비전으로 트래픽 전환
+make build            # 이미지 빌드
+make run              # 로컬 컨테이너 실행 (.env.local 필요)
+make registry-create  # Artifact Registry 저장소 생성 (최초 1회)
+make docker-auth      # Artifact Registry 인증 설정
+make push             # 이미지 푸시 (docker-auth 선행)
+make deploy           # 현재 이미지로 Cloud Run 배포
+make deploy-prod      # 빌드 → 푸시 → 배포 일괄 실행
+make logs             # Cloud Run 로그 조회
+make status           # 서비스 상태 조회
+make rollback         # 이전 리비전으로 트래픽 전환
+```
+
+이미지 태그는 `TAG` 변수로 바꿀 수 있다. 기본값은 `latest`다.
+
+```bash
+make build TAG=v1.0.0
 ```
 
 배포용 GCP 리소스는 아직 만들지 않았다. 자동 배포 워크플로도 잠시 꺼둔 상태다. [이슈 #20](https://github.com/woodruff2k/daily-report/issues/20)에서 진행한다.
