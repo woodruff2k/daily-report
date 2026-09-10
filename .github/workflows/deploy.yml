@@ -1,8 +1,13 @@
 name: Deploy to Cloud Run
 
+# 자동 배포는 Issue #20(GCP 리소스 프로비저닝)까지 보류한다.
+# WIF_PROVIDER / WIF_SERVICE_ACCOUNT 시크릿이 없어 GCP 인증 단계에서 반드시 실패하므로,
+# main 푸시마다 실패 알림이 쌓이는 것을 막기 위해 push 트리거를 잠시 꺼둔다.
+# Issue #20 착수 시 아래 push 블록의 주석을 해제한다.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
 
 env:
   PROJECT_ID: "370670066576"
