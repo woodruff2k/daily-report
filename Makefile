@@ -1,4 +1,4 @@
-PROJECT_ID  := 370670066576
+PROJECT_ID  := fluid-skyline-430301-d0
 REGION      := asia-northeast3
 SERVICE     := daily-report
 REGISTRY    := asia-northeast3-docker.pkg.dev
