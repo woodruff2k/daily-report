@@ -115,7 +115,7 @@ db-studio:
 
 .PHONY: db-up
 db-up:
-	docker compose up -d
+	docker compose up -d --wait
 
 .PHONY: db-down
 db-down:
