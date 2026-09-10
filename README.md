@@ -34,8 +34,10 @@ npm install
 ### 2. 환경 변수 준비
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
+
+파일 이름은 `.env`여야 한다. Prisma CLI가 `.env`만 읽기 때문에, `.env.local`로 만들면 `make migrate`를 비롯한 DB 관련 명령이 `DATABASE_URL`을 찾지 못한다. Next.js는 두 파일을 모두 읽으므로 `.env` 하나로 CLI와 애플리케이션이 함께 해결된다. `.env`는 `.gitignore`에 등록되어 있다.
 
 `JWT_SECRET`은 실제 값으로 바꾼다.
 
@@ -53,7 +55,7 @@ make db-seed    # 더미 데이터 투입
 
 `make db-up`은 컨테이너가 정상 상태가 될 때까지 기다린 뒤 종료하므로 위 세 명령을 연달아 실행해도 된다.
 
-> **컨테이너는 호스트 5433 포트에 붙는다.** 호스트에 이미 떠 있는 PostgreSQL과 충돌하지 않도록 5432 대신 5433으로 매핑했다(컨테이너 내부 포트는 5432 그대로다). `DATABASE_URL`의 포트도 5433이어야 하며, 기존에 `.env.local`을 만들어 둔 경우 직접 고쳐야 한다. 배경은 [이슈 #31](https://github.com/woodruff2k/daily-report/issues/31)을 참고한다.
+> **컨테이너는 호스트 5433 포트에 붙는다.** 호스트에 이미 떠 있는 PostgreSQL과 충돌하지 않도록 5432 대신 5433으로 매핑했다(컨테이너 내부 포트는 5432 그대로다). `DATABASE_URL`의 포트도 5433이어야 하며, 기존에 환경 파일을 만들어 둔 경우 직접 고쳐야 한다. 배경은 [이슈 #31](https://github.com/woodruff2k/daily-report/issues/31)을 참고한다.
 
 ### 4. 개발 서버 실행
 
@@ -103,7 +105,7 @@ make migrate-dev  # 마이그레이션 생성 및 적용 (dev)
 
 ```bash
 make build            # 이미지 빌드
-make run              # 로컬 컨테이너 실행 (.env.local 필요)
+make run              # 로컬 컨테이너 실행 (.env 필요)
 make registry-create  # Artifact Registry 저장소 생성 (최초 1회)
 make docker-auth      # Artifact Registry 인증 설정
 make push             # 이미지 푸시 (docker-auth 선행)
