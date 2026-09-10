@@ -18,7 +18,7 @@
 | 테스트 | Vitest |
 | 배포 | Docker, Google Cloud Run (asia-northeast3) |
 
-Prisma는 `6.19.3`으로 정확히 고정되어 있다. 7.x는 DB 접속 설정과 `.env` 로드, seed 설정을 모두 `prisma.config.ts`로 옮겨야 해서 버전만 올리면 동작하지 않는다. 자세한 배경은 `prisma/schema.prisma` 상단 주석에 있다.
+Prisma는 `6.19.3`으로 정확히 고정되어 있다. 7.x로 올리려면 DB 접속 설정을 `prisma.config.ts`로 옮겨야 해서 버전만 바꾸면 동작하지 않는다. seed 설정과 `.env` 로드는 이미 `prisma.config.ts`에 있다. 자세한 배경은 `prisma/schema.prisma` 상단 주석에 있다.
 
 ## 시작하기
 
@@ -150,6 +150,7 @@ prisma/
 ├── migrations/            # 마이그레이션 이력
 └── seed.ts                # 더미 데이터
 
+prisma.config.ts           # Prisma CLI 설정 (스키마 경로, seed, .env 로드)
 docs/                      # 요건 문서
 ```
 
