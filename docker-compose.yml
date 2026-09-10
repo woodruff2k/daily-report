@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: daily_report
     ports:
-      - "5432:5432"
+      # 호스트 5432를 다른 PostgreSQL이 점유하는 경우가 많아 5433으로 매핑한다.
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

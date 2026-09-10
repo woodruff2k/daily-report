@@ -53,7 +53,7 @@ make db-seed    # 더미 데이터 투입
 
 `make db-up`은 컨테이너가 정상 상태가 될 때까지 기다린 뒤 종료하므로 위 세 명령을 연달아 실행해도 된다.
 
-> **호스트 5432 포트가 이미 사용 중이면 접속에 실패한다.** 다른 PostgreSQL이 떠 있으면 컨테이너가 정상 상태로 보여도 연결이 그쪽으로 간다. 기존 PostgreSQL을 중지하거나 [이슈 #31](https://github.com/woodruff2k/daily-report/issues/31)을 참고한다.
+> **컨테이너는 호스트 5433 포트에 붙는다.** 호스트에 이미 떠 있는 PostgreSQL과 충돌하지 않도록 5432 대신 5433으로 매핑했다(컨테이너 내부 포트는 5432 그대로다). `DATABASE_URL`의 포트도 5433이어야 하며, 기존에 `.env.local`을 만들어 둔 경우 직접 고쳐야 한다. 배경은 [이슈 #31](https://github.com/woodruff2k/daily-report/issues/31)을 참고한다.
 
 ### 4. 개발 서버 실행
 
