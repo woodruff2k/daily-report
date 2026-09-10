@@ -5,9 +5,11 @@ import "dotenv/config";
 
 import { defineConfig } from "prisma/config";
 
-// Prisma CLI 설정. package.json#prisma 는 Prisma 7 에서 제거되므로 이 파일로 옮겼다.
-// DB 접속 URL 은 아직 prisma/schema.prisma 의 datasource 블록에 있다.
-// 7.x 로 올릴 때 이 파일의 datasource 로 이관한다. (Issue #37)
+// Prisma CLI 설정. seed 설정을 package.json#prisma 에서 이 파일로 옮겼다.
+// package.json#prisma 는 deprecated 라 명령마다 경고가 나왔고, 이 파일이 그 경고를 없앤다.
+//
+// DB 접속 URL 은 prisma/schema.prisma 의 datasource 블록에 그대로 둔다.
+// 이 프로젝트는 Prisma 6 에서 유지하므로 옮길 이유가 없다.
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {

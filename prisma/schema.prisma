@@ -2,15 +2,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// prisma / @prisma/client 는 6.19.3 으로 정확히 고정되어 있다. 7.x 로 올리면 안 된다.
+// prisma / @prisma/client 는 6.19.3 으로 정확히 고정되어 있다.
+// 이 프로젝트는 Prisma 6 에서 유지하기로 결정했다. 7.x 로 올리지 않는다.
 //
-// Prisma 7 은 아래 datasource 블록의 url(그리고 directUrl, shadowDatabaseUrl)을
-// 폐기하고 DB 접속 설정을 prisma.config.ts 로 옮겼다.
+// 7.x 는 아래 datasource 블록의 url 폐기에 더해 제너레이터 교체, import 경로 변경,
+// 드라이버 어댑터 필수화, ESM 전환, Node 20.19 이상 요구가 함께 따라온다.
+// 학습용 프로젝트 범위에 비해 비용이 커서 올리지 않기로 했다.
 //
-// 이관 준비는 절반 끝났다. prisma.config.ts 를 이미 도입해서 seed 설정과
-// dotenv 로드는 그쪽에 있다. 7.x 로 올릴 때 남은 작업은 아래 url 을
-// prisma.config.ts 의 datasource 로 옮기는 것이다.
-//
+// 다시 검토한다면 이슈 #37 의 코멘트에 남은 작업 목록이 정리되어 있다.
 // (배경: Issue #28, #37, PR #22)
 datasource db {
   provider = "postgresql"
