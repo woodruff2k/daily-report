@@ -37,7 +37,7 @@ build:
 .PHONY: run
 run:
 	docker run --rm -p 8080:8080 \
-	  --env-file .env.local \
+	  --env-file .env \
 	  $(IMAGE):$(TAG)
 
 # ── Artifact Registry ─────────────────────────────────────────
