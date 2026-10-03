@@ -32,6 +32,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: {
         passwordHash: await hashPassword(temporaryPassword),
         mustChangePassword: true,
+        // 재발급의 목적은 계정을 되찾는 것이다. 기존 토큰이 살아 있으면
+        // 탈취된 세션이 그대로 유지된다. (이슈 #52)
+        tokenVersion: { increment: 1 },
       },
       select: { repId: true, empNo: true },
     });

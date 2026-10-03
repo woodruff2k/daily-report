@@ -44,7 +44,7 @@ beforeEach(() => {
     role: ACTIVE_REP.role,
     passwordHash: ACTIVE_REP.passwordHash,
   } as never);
-  vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(ACTIVE_REP);
+  vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue({ tokenVersion: 1 } as never);
   vi.mocked(verifyPassword).mockReset().mockResolvedValue(true);
   vi.mocked(hashPassword).mockClear();
   vi.mocked(signAccessToken).mockClear();
@@ -57,7 +57,12 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
     expect(response.status).toBe(200);
     expect(prisma.salesRep.update).toHaveBeenCalledWith({
       where: { repId: 1n },
-      data: { passwordHash: `hashed:${NEW}`, mustChangePassword: false },
+      data: {
+        passwordHash: `hashed:${NEW}`,
+        mustChangePassword: false,
+        tokenVersion: { increment: 1 },
+      },
+      select: { tokenVersion: true },
     });
   });
 
@@ -125,5 +130,23 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
     const body = JSON.stringify(await readBody(response));
     expect(body).not.toContain(NEW);
     expect(body).not.toContain("hashed:");
+  });
+});
+
+describe("PUT /api/me/password — 기존 토큰 무효화 (#52)", () => {
+  it("토큰 버전을 올린다", async () => {
+    await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
+
+    // 다른 기기에 남아 있던 세션도 끊는다.
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data).toMatchObject({ tokenVersion: { increment: 1 } });
+  });
+
+  it("새 토큰에 올라간 버전을 담는다", async () => {
+    await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
+
+    expect(signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenVersion: 1 })
+    );
   });
 });

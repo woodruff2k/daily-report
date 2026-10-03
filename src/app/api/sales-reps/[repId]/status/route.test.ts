@@ -45,7 +45,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
     expect(body.data).toMatchObject({ repId: 1, status: "INACTIVE" });
     expect(prisma.salesRep.update).toHaveBeenCalledWith({
       where: { repId: 1n },
-      data: { status: "INACTIVE" },
+      data: { status: "INACTIVE", tokenVersion: { increment: 1 } },
     });
   });
 
@@ -110,5 +110,28 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
 
     expect(response.status).toBe(403);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH status — 토큰 무효화 (#52)", () => {
+  it("비활성화하면 토큰 버전을 올린다", async () => {
+    await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
+      params("1")
+    );
+
+    // 비활성화는 즉시 효력이 있어야 한다. 토큰 만료를 기다리지 않는다.
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data).toMatchObject({ tokenVersion: { increment: 1 } });
+  });
+
+  it("재활성화할 때는 버전을 올리지 않는다", async () => {
+    vi.mocked(prisma.salesRep.update).mockResolvedValue(REP);
+
+    await PATCH(asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }), params("1"));
+
+    // 끊을 세션이 없다. 이미 비활성 상태에서는 토큰이 모두 막혀 있다.
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data.tokenVersion).toBeUndefined();
   });
 });
