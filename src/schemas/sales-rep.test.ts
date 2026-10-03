@@ -75,11 +75,26 @@ describe("salesRepCreateSchema", () => {
 });
 
 describe("salesRepUpdateSchema", () => {
+  /** 수정은 role·status 를 필수로 받는다. 생성용 VALID 에는 role 이 없다. */
+  const UPDATE_VALID = { ...VALID, role: "SALES_REP" };
+
   it("password 를 받지 않는다", () => {
-    const result = salesRepUpdateSchema.safeParse({ ...VALID, password: "longenough1" });
+    const result = salesRepUpdateSchema.safeParse({
+      ...UPDATE_VALID,
+      password: "longenough1",
+    });
 
     expect(result.success).toBe(true);
     expect(result.data).not.toHaveProperty("password");
+  });
+
+  it.each(["role", "status"])("%s 는 필수다 — 기본값으로 메우지 않는다", (field) => {
+    const payload: Record<string, unknown> = { ...UPDATE_VALID };
+    delete payload[field];
+
+    // 생성과 달리 기본값을 두지 않는다. PUT 은 전체 교체라 기본값이 적용되면
+    // 보내지 않은 필드가 조용히 바뀐다.
+    expect(salesRepUpdateSchema.safeParse(payload).success).toBe(false);
   });
 });
 

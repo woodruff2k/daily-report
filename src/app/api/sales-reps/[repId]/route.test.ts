@@ -30,6 +30,7 @@ const UPDATE_BODY = {
   department: "영업2팀",
   position: "과장",
   managerId: 2,
+  role: "SALES_REP",
   status: "ACTIVE",
 };
 
@@ -173,5 +174,34 @@ describe("PUT /api/sales-reps/{repId}", () => {
 
     expect(response.status).toBe(403);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌지 않는다 (#48)", () => {
+  it.each([
+    ["role", "역할"],
+    ["status", "상태"],
+  ])("%s 를 빼면 400 이다", async (field) => {
+    const body: Record<string, unknown> = { ...UPDATE_BODY };
+    delete body[field];
+
+    const response = await PUT(asAdmin(URL, { method: "PUT", body }), params("1"));
+
+    // 기본값이 적용되면 MANAGER 가 SALES_REP 로 강등되거나
+    // 비활성 계정이 다시 활성화된다. 부서명만 고치려던 요청이 권한을 바꾼다.
+    expect(response.status).toBe(400);
+    expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+
+  it("역할을 명시하면 그 값으로 바꾼다", async () => {
+    await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, role: "MANAGER" } }),
+      params("1")
+    );
+
+    expect(prisma.salesRep.update).toHaveBeenCalledWith({
+      where: { repId: 1n },
+      data: expect.objectContaining({ role: "MANAGER" }),
+    });
   });
 });

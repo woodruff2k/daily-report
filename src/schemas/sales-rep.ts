@@ -43,8 +43,20 @@ export const salesRepCreateSchema = z.object({
   password: z.string().min(8).max(72).optional(),
 });
 
-/** 전체 필드 수정. PUT이므로 생성과 같은 필수 항목을 요구한다. (API 명세 6.3) */
-export const salesRepUpdateSchema = salesRepCreateSchema.omit({ password: true });
+/**
+ * 전체 필드 수정. (API 명세 6.3)
+ *
+ * `role`·`status`는 생성과 달리 **기본값을 두지 않고 필수로 받는다.** PUT은 전체
+ * 교체이므로 기본값이 적용되면 보내지 않은 필드가 조용히 바뀐다. `role`을 빼면
+ * MANAGER가 SALES_REP로 강등되고, `status`를 빼면 비활성 계정이 다시 활성화된다.
+ * 둘 다 부서명만 고치려던 요청이 권한을 바꿔버리는 경우다.
+ *
+ * 화면(SCR-510)에서 역할·상태는 모두 필수 항목이므로 정상 요청은 영향이 없다.
+ */
+export const salesRepUpdateSchema = salesRepCreateSchema.omit({ password: true }).extend({
+  role: roleSchema,
+  status: repStatusSchema,
+});
 
 /** 비활성화. 상태 전환만 허용한다. (NFR-03, API 명세 6.4) */
 export const salesRepStatusSchema = z.object({
