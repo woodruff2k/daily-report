@@ -12,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     salesRep: {
       findUnique: vi.fn(),
+      count: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     },
@@ -39,6 +40,7 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
+  vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
   vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(REP);
 });
@@ -122,7 +124,14 @@ describe("PUT /api/sales-reps/{repId}", () => {
   });
 
   it("없는 상급자를 지정하면 400이다", async () => {
-    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(null);
+    // PUT 은 findUnique 를 세 번 쓴다 — 수정 대상, 마지막 관리자 판정,
+    // 상급자 조회. 호출 순서에 의존하지 않도록 repId 로 분기한다.
+    vi.mocked(prisma.salesRep.findUnique).mockImplementation(((args: {
+      where: { repId: bigint };
+    }) =>
+      Promise.resolve(
+        args.where.repId === 2n ? null : { ...MANAGER_REP, managerId: null }
+      )) as never);
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: UPDATE_BODY }),
@@ -268,5 +277,64 @@ describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
 
     expect(response.status).toBe(404);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/sales-reps/{repId} — #49 후속 수정", () => {
+  it("마지막 활성 관리자를 강등할 수 없다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
+      ...MANAGER_REP,
+      role: "ADMIN",
+      managerId: null,
+    });
+    vi.mocked(prisma.salesRep.count).mockResolvedValue(0);
+
+    const response = await PUT(
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined, role: "SALES_REP" },
+      }),
+      params("1")
+    );
+
+    expect(response.status).toBe(409);
+    expect((await readBody(response)).error?.code).toBe("LAST_ACTIVE_ADMIN");
+    expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+
+  it("상급자가 그대로면 상급자 검증을 다시 하지 않는다", async () => {
+    // 상급자가 나중에 비활성화됐어도 이름·부서는 고칠 수 있어야 한다.
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
+      ...MANAGER_REP,
+      role: "SALES_REP",
+      managerId: 2n,
+      status: "INACTIVE",
+    });
+
+    const response = await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 2 } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("상급자를 바꿀 때는 검증한다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockImplementation(((args: {
+      where: { repId: bigint };
+    }) =>
+      Promise.resolve(
+        args.where.repId === 7n
+          ? { ...MANAGER_REP, role: "SALES_REP", status: "ACTIVE" }
+          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n }
+      )) as never);
+
+    const response = await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 7 } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(400);
+    expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
   });
 });

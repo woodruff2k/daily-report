@@ -4,7 +4,11 @@ import { assertRole, parseAuthContext } from "@/lib/auth";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
-import { assertManagerExists, toSalesRepResponse } from "@/lib/sales-rep";
+import {
+  assertManagerAssignable,
+  assertNotLastActiveAdmin,
+  toSalesRepResponse,
+} from "@/lib/sales-rep";
 import { parseRepIdParam } from "@/lib/sales-rep-query";
 import { salesRepUpdateSchema } from "@/schemas/sales-rep";
 
@@ -51,20 +55,25 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const { managerId, ...fields } = parsed.data;
 
-    if (managerId !== undefined) {
-      await assertManagerExists(BigInt(managerId), repId);
-    }
-
-    // 역할이 바뀌거나 비활성화되면 기존 토큰을 끊는다. 토큰에 역할이 담겨
-    // 있어, 버전을 올리지 않으면 강등된 사람이 만료까지 이전 권한을 쓴다.
-    // (이슈 #52)
+    // 현재 값을 먼저 읽는다. 토큰 무효화 판단(#52)과 상급자 재검증 여부(#49)
+    // 모두 바뀐 항목이 무엇인지에 달려 있다.
     const current = await prisma.salesRep.findUnique({
       where: { repId },
-      select: { role: true, status: true },
+      select: { role: true, status: true, managerId: true },
     });
 
     if (!current) {
       throw new NotFoundError("영업사원을 찾을 수 없습니다.");
+    }
+
+    await assertNotLastActiveAdmin(repId, { role: fields.role, status: fields.status });
+
+    // 상급자가 바뀔 때만 검증한다. 매번 검증하면 상급자가 나중에 비활성화된
+    // 사원은 이름·부서만 고치려는 요청까지 막힌다. (이슈 #49)
+    const nextManagerId = managerId === undefined ? null : BigInt(managerId);
+
+    if (nextManagerId !== null && nextManagerId !== current.managerId) {
+      await assertManagerAssignable(nextManagerId, repId);
     }
 
     const revokeTokens =
@@ -75,7 +84,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       where: { repId },
       data: {
         ...fields,
-        managerId: managerId === undefined ? null : BigInt(managerId),
+        managerId: nextManagerId,
         tokenVersion: revokeTokens ? { increment: 1 } : undefined,
       },
     });

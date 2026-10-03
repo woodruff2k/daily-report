@@ -77,6 +77,30 @@ describe("GET /api/sales-reps", () => {
     expect(JSON.stringify(await readBody(response))).not.toContain("$2a$");
   });
 
+  it("목록에 이메일을 담지 않는다 (#49)", async () => {
+    const response = await GET(asAdmin(URL));
+    const body = await readBody(response);
+
+    // SCR-500 의 목록 항목에 이메일이 없다. 매 건 실어 보낼 이유가 없다. (NFR-04)
+    expect(JSON.stringify(body)).not.toContain(REP.email);
+    const [first] = (body.data as { content: Record<string, unknown>[] }).content;
+    expect(first).not.toHaveProperty("email");
+  });
+
+  it("목록에 화면이 쓰는 항목은 담는다", async () => {
+    const body = await readBody(await GET(asAdmin(URL)));
+    const [first] = (body.data as { content: Record<string, unknown>[] }).content;
+
+    expect(first).toMatchObject({
+      repId: 1,
+      empNo: REP.empNo,
+      name: REP.name,
+      department: REP.department,
+      position: REP.position,
+      status: REP.status,
+    });
+  });
+
   it("영업사원이 호출하면 403이다", async () => {
     const response = await GET(asSalesRep(URL));
 

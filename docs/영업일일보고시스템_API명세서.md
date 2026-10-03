@@ -378,6 +378,8 @@
 | department | string | N | 부서 |
 | status | enum | N | ACTIVE / INACTIVE |
 
+응답의 목록 항목은 화면(SCR-500)이 쓰는 것만 담는다 — `repId`, `empNo`, `name`, `department`, `position`, `managerId`, `role`, `status`. **이메일은 포함하지 않는다**(NFR-04). 이메일이 필요하면 상세(6.3)를 쓴다.
+
 ### 6.2 영업 등록
 
 `POST /api/sales-reps`
@@ -393,7 +395,11 @@
 ```
 
 - `role`은 `SALES_REP` / `MANAGER` / `ADMIN` 중 하나이며 생략하면 `SALES_REP`다. 이 API 자체가 관리자 전용이므로 역할 지정도 관리자만 할 수 있다.
-- `managerId`로 지정하는 사원은 **role이 `MANAGER`여야 한다.** 어긋나면 400(`MANAGER_ROLE_REQUIRED`). 데이터상 상급자인데 팀 보고 조회·댓글 권한이 없는 상태를 막기 위한 제약이다.
+- `managerId`로 지정하는 사원은 다음을 만족해야 한다. 어긋나면 400이다.
+  - **존재**(`MANAGER_NOT_FOUND`)
+  - **활성 상태**(`MANAGER_INACTIVE`) — 비활성 상급자는 로그인할 수 없어 그 팀의 보고를 아무도 검토하지 못한다
+  - **role이 `MANAGER`**(`MANAGER_ROLE_REQUIRED`) — 데이터상 상급자인데 팀 보고 조회·댓글 권한이 없는 상태를 막는다
+  - **순환 없음**(`SELF_MANAGER`, `MANAGER_CYCLE`) — 자기 자신은 물론 A→B→A 같은 간접 순환도 막는다
 
 - `empNo`, `email`은 유일값(중복 시 409).
 
@@ -421,10 +427,14 @@
 
 - PUT은 **전체 교체**다. `role`과 `status`는 생성과 달리 **필수**이며 생략하면 400이다. 기본값으로 메우면 보내지 않은 필드가 조용히 바뀐다 — `role`을 빼면 상급자가 영업사원으로 강등되고, `status`를 빼면 비활성 계정이 다시 활성화된다.
 - `managerId`를 생략하면 상급자 관계가 해제된다(전체 교체).
+- **`managerId`가 바뀔 때만 상급자 제약(6.2)을 검증한다.** 값이 그대로면 검증을 건너뛴다. 매번 검증하면 상급자가 나중에 비활성화된 사원은 이름·부서만 고치려는 요청까지 막힌다. 마스터는 물리 삭제 대신 비활성화로 남으므로(NFR-03) 그 상태는 정상이다.
+- **마지막 활성 관리자의 역할 강등·비활성화는 409(`LAST_ACTIVE_ADMIN`)로 막는다.** 영업 마스터 관리 경로가 영구 차단되고, 토큰까지 즉시 끊겨(1.5) 되돌릴 방법이 DB 직접 수정뿐이다. 관리자가 여럿이면 교체·정리는 정상 작업이므로 허용한다.
 
 ### 6.4 영업 비활성화
 
 `PATCH /api/sales-reps/{repId}/status` → 200
+
+- 마지막 활성 관리자는 비활성화할 수 없다 — 409 `LAST_ACTIVE_ADMIN`. 6.3과 같은 규칙이다.
 
 ### 6.5 임시 비밀번호 재발급
 
