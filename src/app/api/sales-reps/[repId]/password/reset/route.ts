@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { apiErrorResponse, apiSuccess } from "@/lib/api-response";
 import { assertRole, parseAuthContext } from "@/lib/auth";
+import { toJsonId } from "@/lib/identifier";
 import { generateTemporaryPassword, hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
 
     return apiSuccess({
-      repId: Number(updated.repId),
+      repId: toJsonId(updated.repId),
       empNo: updated.empNo,
       temporaryPassword,
     });

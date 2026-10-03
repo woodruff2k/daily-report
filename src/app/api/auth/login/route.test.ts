@@ -46,7 +46,7 @@ describe("POST /api/auth/login — TC-AUTH-01 정상 로그인", () => {
     expect(body.success).toBe(true);
     expect(body.data).toEqual({
       accessToken: "signed.access.token",
-      rep: { repId: "1", name: "홍길동", role: "SALES_REP" },
+      rep: { repId: 1, name: "홍길동", role: "SALES_REP" },
       mustChangePassword: false,
     });
   });
@@ -183,5 +183,25 @@ describe("POST /api/auth/login — 임시 비밀번호 상태 (#44)", () => {
     const body = await readBody(await login({ loginId: MUST_CHANGE_REP.email, password: PASSWORD }));
 
     expect(body.data?.accessToken).toBe("signed.access.token");
+  });
+});
+
+describe("POST /api/auth/login — 식별자 타입 (#47)", () => {
+  it("응답의 repId 는 숫자다", async () => {
+    const body = await readBody(await login({ loginId: ACTIVE_REP.email, password: PASSWORD }));
+    const rep = (body.data as { rep: { repId: unknown } }).rep;
+
+    // API 명세 2.1 이 숫자로 적고 있다. 문자열로 내보내면 영업 마스터
+    // 응답(숫자)과 비교할 때 "1" !== 1 로 어긋난다.
+    expect(typeof rep.repId).toBe("number");
+    expect(rep.repId).toBe(1);
+  });
+
+  it("토큰 payload 의 repId 는 문자열로 둔다", async () => {
+    await login({ loginId: ACTIVE_REP.email, password: PASSWORD });
+
+    // JWT 클레임은 외부 응답이 아니고 프록시가 BigInt 로 되돌린다.
+    const [payload] = vi.mocked(signAccessToken).mock.calls[0];
+    expect(typeof payload.repId).toBe("string");
   });
 });

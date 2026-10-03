@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
+import { idSchema } from "./identifier";
 
 /**
  * 영업 마스터 입력 검증. (FR-02, API 명세 6)
@@ -18,23 +19,13 @@ const repStatusSchema = z.enum(["ACTIVE", "INACTIVE"]);
  */
 const roleSchema = z.enum(["SALES_REP", "MANAGER", "ADMIN"]);
 
-/**
- * 식별자는 JSON 숫자(API 명세 6.2)로 오지만 DB는 BigInt다.
- * 안전 정수 범위를 넘는 값은 변환 과정에서 정밀도를 잃으므로 미리 막는다.
- */
-const repIdSchema = z
-  .number()
-  .int()
-  .positive()
-  .max(Number.MAX_SAFE_INTEGER);
-
 export const salesRepCreateSchema = z.object({
   empNo: z.string().trim().min(1).max(20),
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(255),
   department: z.string().trim().max(100).optional(),
   position: z.string().trim().max(100).optional(),
-  managerId: repIdSchema.optional(),
+  managerId: idSchema.optional(),
   role: roleSchema.default("SALES_REP"),
   status: repStatusSchema.default("ACTIVE"),
   /**

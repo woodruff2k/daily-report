@@ -1,5 +1,6 @@
 import type { SalesRep } from "@prisma/client";
 import { ConflictError, ValidationError } from "./errors";
+import { toJsonId, toJsonIdOrNull } from "./identifier";
 import { prisma } from "./prisma";
 
 /**
@@ -44,12 +45,12 @@ export interface SalesRepListItem {
 /** Prisma 레코드를 목록 항목으로 바꾼다. */
 export function toSalesRepListItem(rep: SalesRep): SalesRepListItem {
   return {
-    repId: Number(rep.repId),
+    repId: toJsonId(rep.repId),
     empNo: rep.empNo,
     name: rep.name,
     department: rep.department,
     position: rep.position,
-    managerId: rep.managerId === null ? null : Number(rep.managerId),
+    managerId: toJsonIdOrNull(rep.managerId),
     role: rep.role,
     status: rep.status,
   };
@@ -64,13 +65,13 @@ export function toSalesRepListItem(rep: SalesRep): SalesRepListItem {
  */
 export function toSalesRepResponse(rep: SalesRep): SalesRepResponse {
   return {
-    repId: Number(rep.repId),
+    repId: toJsonId(rep.repId),
     empNo: rep.empNo,
     name: rep.name,
     email: rep.email,
     department: rep.department,
     position: rep.position,
-    managerId: rep.managerId === null ? null : Number(rep.managerId),
+    managerId: toJsonIdOrNull(rep.managerId),
     role: rep.role,
     status: rep.status,
     createdAt: rep.createdAt.toISOString(),
