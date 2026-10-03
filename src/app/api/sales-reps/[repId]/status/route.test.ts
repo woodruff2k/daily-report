@@ -16,6 +16,9 @@ vi.mock("@/lib/prisma", () => ({
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
+    // 판정과 쓰기를 한 트랜잭션에 묶는다. (#55)
+    $transaction: vi.fn(),
+    $executeRaw: vi.fn(),
   },
 }));
 
@@ -29,6 +32,11 @@ function prismaError(code: string) {
 }
 
 beforeEach(() => {
+  // 트랜잭션 콜백에 모킹한 클라이언트를 그대로 넘긴다.
+  vi.mocked(prisma.$transaction)
+    .mockReset()
+    .mockImplementation(((fn: (tx: unknown) => unknown) => fn(prisma)) as never);
+  vi.mocked(prisma.$executeRaw).mockReset().mockResolvedValue(1 as never);
   // 기본값은 관리자가 아닌 사원 — 마지막 관리자 판정에 걸리지 않는다.
   vi.mocked(prisma.salesRep.findUnique)
     .mockReset()
@@ -185,5 +193,35 @@ describe("PATCH status — 마지막 관리자 보호 (#49)", () => {
     );
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe("PATCH status — 판정과 쓰기를 한 트랜잭션에 묶는다 (#55)", () => {
+  it("트랜잭션 안에서 처리한다", async () => {
+    await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
+      params("1")
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("쓰기 전에 잠금을 건다", async () => {
+    await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
+      params("1")
+    );
+
+    // 판정과 쓰기 사이에 다른 요청이 끼면 관리자가 0명이 될 수 있다.
+    expect(prisma.$executeRaw).toHaveBeenCalled();
+    const lockOrder = vi.mocked(prisma.$executeRaw).mock.invocationCallOrder[0];
+    const updateOrder = vi.mocked(prisma.salesRep.update).mock.invocationCallOrder[0];
+    expect(lockOrder).toBeLessThan(updateOrder);
+  });
+
+  it("잘못된 요청에는 트랜잭션을 열지 않는다", async () => {
+    await PATCH(asAdmin(URL, { method: "PATCH", body: { status: "DELETED" } }), params("1"));
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

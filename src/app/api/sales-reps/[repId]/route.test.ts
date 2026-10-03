@@ -16,6 +16,9 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    // 판정과 쓰기를 한 트랜잭션에 묶는다. (#55)
+    $transaction: vi.fn(),
+    $executeRaw: vi.fn(),
   },
 }));
 
@@ -40,6 +43,10 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
+  vi.mocked(prisma.$transaction)
+    .mockReset()
+    .mockImplementation(((fn: (tx: unknown) => unknown) => fn(prisma)) as never);
+  vi.mocked(prisma.$executeRaw).mockReset().mockResolvedValue(1 as never);
   vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
   vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(REP);
@@ -336,5 +343,38 @@ describe("PUT /api/sales-reps/{repId} — #49 후속 수정", () => {
 
     expect(response.status).toBe(400);
     expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
+  });
+});
+
+describe("PUT /api/sales-reps/{repId} — 트랜잭션·잠금 (#55)", () => {
+  it("쓰기 전에 잠금을 건다", async () => {
+    await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
+      params("1")
+    );
+
+    const lockOrder = vi.mocked(prisma.$executeRaw).mock.invocationCallOrder[0];
+    const updateOrder = vi.mocked(prisma.salesRep.update).mock.invocationCallOrder[0];
+    expect(lockOrder).toBeLessThan(updateOrder);
+  });
+
+  it("상급자 검증 실패 시에는 트랜잭션을 열지 않는다", async () => {
+    // 체인 추적은 조회가 여러 번이라 잠금 밖에 둔다.
+    vi.mocked(prisma.salesRep.findUnique).mockImplementation(((args: {
+      where: { repId: bigint };
+    }) =>
+      Promise.resolve(
+        args.where.repId === 7n
+          ? { ...MANAGER_REP, role: "SALES_REP" }
+          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n }
+      )) as never);
+
+    const response = await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 7 } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -229,6 +229,20 @@ docs/                      # 요건 문서
 | `MANAGER` | 직속 팀원의 제출된 보고 조회·댓글, 고객 마스터 조회·등록 |
 | `ADMIN` | 영업 마스터 관리 |
 
+### 관리자 계정이 0명이 된 경우
+
+영업 마스터 API는 관리자 전용이므로 활성 관리자가 없으면 관리 경로가 막힌다. `npm run bootstrap:admin`은 **활성 관리자가 없을 때만** 동작하므로 이 상황의 복구 수단이 된다.
+
+```bash
+BOOTSTRAP_ADMIN_EMP_NO=S0000002 \
+BOOTSTRAP_ADMIN_NAME=복구관리자 \
+BOOTSTRAP_ADMIN_EMAIL=recovery@example.com \
+BOOTSTRAP_ADMIN_PASSWORD='...' \
+npm run bootstrap:admin
+```
+
+평상시에는 마지막 활성 관리자의 강등·비활성화가 409로 막히고(API 명세 6.3), 동시 요청으로 그 검사를 우회하는 경로도 권고 잠금으로 닫혀 있다. 그래도 DB를 직접 수정하면 이 상태가 만들어질 수 있다.
+
 ### 토큰 무효화
 
 JWT는 8시간 유효하지만 서버가 거둬들일 수 있다. `SalesRep.tokenVersion`을 토큰에 담고, 프록시가 요청마다 DB 값과 비교한다. 비밀번호 변경·재발급, 계정 비활성화, 역할 변경, 로그아웃이 그 값을 올려 기존 토큰을 즉시 끊는다.
