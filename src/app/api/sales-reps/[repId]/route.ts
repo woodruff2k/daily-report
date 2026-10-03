@@ -55,11 +55,28 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       await assertManagerExists(BigInt(managerId), repId);
     }
 
+    // 역할이 바뀌거나 비활성화되면 기존 토큰을 끊는다. 토큰에 역할이 담겨
+    // 있어, 버전을 올리지 않으면 강등된 사람이 만료까지 이전 권한을 쓴다.
+    // (이슈 #52)
+    const current = await prisma.salesRep.findUnique({
+      where: { repId },
+      select: { role: true, status: true },
+    });
+
+    if (!current) {
+      throw new NotFoundError("영업사원을 찾을 수 없습니다.");
+    }
+
+    const revokeTokens =
+      current.role !== fields.role ||
+      (current.status !== fields.status && fields.status === "INACTIVE");
+
     const updated = await prisma.salesRep.update({
       where: { repId },
       data: {
         ...fields,
         managerId: managerId === undefined ? null : BigInt(managerId),
+        tokenVersion: revokeTokens ? { increment: 1 } : undefined,
       },
     });
 

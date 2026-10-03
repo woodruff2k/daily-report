@@ -33,7 +33,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const updated = await prisma.salesRep.update({
       where: { repId },
-      data: { status: parsed.data.status },
+      data: {
+        status: parsed.data.status,
+        // 비활성화는 즉시 효력이 있어야 한다. 버전을 올려 그 계정의 기존
+        // 토큰을 끊는다. 재활성화는 끊을 이유가 없다. (이슈 #52)
+        tokenVersion: parsed.data.status === "INACTIVE" ? { increment: 1 } : undefined,
+      },
     });
 
     return apiSuccess(toSalesRepResponse(updated));

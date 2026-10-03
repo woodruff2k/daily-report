@@ -55,12 +55,16 @@ export async function PUT(request: NextRequest) {
       throw new ValidationError("새 비밀번호가 기존 비밀번호와 같습니다.");
     }
 
-    await prisma.salesRep.update({
+    // 버전을 올려 이 계정의 기존 토큰을 모두 무효화한다. 다른 기기에
+    // 남아 있던 세션도 끊긴다. (이슈 #52)
+    const updated = await prisma.salesRep.update({
       where: { repId: auth.repId },
       data: {
         passwordHash: await hashPassword(newPassword),
         mustChangePassword: false,
+        tokenVersion: { increment: 1 },
       },
+      select: { tokenVersion: true },
     });
 
     return apiSuccess({
@@ -69,6 +73,7 @@ export async function PUT(request: NextRequest) {
         name: rep.name,
         role: rep.role,
         mustChangePassword: false,
+        tokenVersion: updated.tokenVersion,
       }),
     });
   } catch (error) {

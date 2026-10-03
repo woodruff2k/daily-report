@@ -205,3 +205,68 @@ describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌�
     });
   });
 });
+
+describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
+  /** 상급자 존재 확인과 현재 상태 조회가 같은 findUnique 를 쓴다. */
+  function currentIs(role: "SALES_REP" | "MANAGER" | "ADMIN", status: "ACTIVE" | "INACTIVE") {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
+      ...MANAGER_REP,
+      role,
+      status,
+    });
+  }
+
+  it("역할이 바뀌면 토큰 버전을 올린다", async () => {
+    currentIs("MANAGER", "ACTIVE");
+
+    await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined, role: "SALES_REP" } }),
+      params("1")
+    );
+
+    // 토큰에 역할이 담겨 있어, 버전을 올리지 않으면 강등된 사람이 만료까지
+    // 이전 권한을 그대로 쓴다.
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data).toMatchObject({ tokenVersion: { increment: 1 } });
+  });
+
+  it("비활성화하면 토큰 버전을 올린다", async () => {
+    currentIs("SALES_REP", "ACTIVE");
+
+    await PUT(
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined, status: "INACTIVE" },
+      }),
+      params("1")
+    );
+
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data).toMatchObject({ tokenVersion: { increment: 1 } });
+  });
+
+  it("역할·상태가 그대로면 버전을 올리지 않는다", async () => {
+    currentIs("SALES_REP", "ACTIVE");
+
+    await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
+      params("1")
+    );
+
+    // 부서명만 고치는 요청이 세션을 끊으면 안 된다.
+    const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
+    expect(data.tokenVersion).toBeUndefined();
+  });
+
+  it("대상 사원이 없으면 404 이고 수정하지 않는다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(null);
+
+    const response = await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
+      params("99")
+    );
+
+    expect(response.status).toBe(404);
+    expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+});

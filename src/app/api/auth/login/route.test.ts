@@ -59,6 +59,7 @@ describe("POST /api/auth/login — TC-AUTH-01 정상 로그인", () => {
       name: "홍길동",
       role: "SALES_REP",
       mustChangePassword: false,
+      tokenVersion: 0,
     });
   });
 

@@ -63,6 +63,10 @@ model SalesRep {
   // 관리자가 발급한 임시 비밀번호 상태. true 면 본인이 바꾸기 전까지
   // 비밀번호 변경 외의 API 를 쓸 수 없다. (이슈 #44)
   mustChangePassword Boolean @default(false) @map("must_change_password")
+  // 발급된 토큰을 무효화하는 수단. 비밀번호 변경·재발급, 비활성화, 역할 변경,
+  // 로그아웃 시 올린다. 프록시가 토큰의 값과 비교해 다르면 401 로 막는다.
+  // JWT 는 상태가 없어 만료 전에는 거둬들일 방법이 없다. (이슈 #52)
+  tokenVersion Int @default(0) @map("token_version")
   role       Role      @default(SALES_REP)
   status     RepStatus @default(ACTIVE)
   createdAt  DateTime  @default(now()) @map("created_at")

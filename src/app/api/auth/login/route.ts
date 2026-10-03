@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     name: rep.name,
     role: rep.role,
     mustChangePassword: rep.mustChangePassword,
+    tokenVersion: rep.tokenVersion,
   });
 
   // mustChangePassword 가 true 면 화면은 비밀번호 변경으로 보내야 한다.
