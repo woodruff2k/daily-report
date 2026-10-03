@@ -92,6 +92,37 @@ make test-coverage  # npm run test:coverage
 
 커밋 시 husky와 lint-staged가 변경된 TypeScript 파일에 ESLint를 자동 실행한다.
 
+### Git worktree
+
+이슈별로 `git worktree`를 쓸 때는 **워크트리 안에서 의존성 설치까지 해야 한다.**
+
+```bash
+git worktree add issue-005 -b feat/issue-5-sales-reps-api
+cd issue-005
+npm install
+```
+
+본 저장소의 `node_modules`를 심볼릭 링크로 연결해 설치를 건너뛰었다면, 대신 `npm run prepare`를 한 번 실행한다.
+
+```bash
+ln -s ../node_modules node_modules
+npm run prepare
+```
+
+`npm install`이나 `npm run prepare` 없이 커밋하면 **husky 훅이 조용히 건너뛰어진다.** 이 저장소는 `core.hooksPath`가 `.husky/_`(상대 경로)이고 git은 이를 현재 작업 트리 최상위 기준으로 해석한다. `.husky/pre-commit`은 저장소에 추적되지만 `.husky/_`는 `prepare` 스크립트가 만드는 미추적 디렉터리라서, 새 워크트리에는 존재하지 않는다. git은 훅을 찾지 못해도 경고를 내지 않는다.
+
+커밋 출력에 lint-staged 로그가 보이지 않으면 훅이 동작하지 않은 것이다. 그 상태로 커밋해야 한다면 검사를 직접 돌린다.
+
+```bash
+npm run lint && npx tsc --noEmit && npm test
+```
+
+작업이 끝나면 워크트리를 정리한다. 본 저장소 쪽에서 실행한다.
+
+```bash
+git worktree remove issue-005
+```
+
 ### 데이터베이스
 
 ```bash
