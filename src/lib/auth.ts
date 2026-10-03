@@ -4,11 +4,11 @@
  * 화면 비표시는 접근통제가 아니므로 모든 권한은 이 헬퍼로 서버에서 검증한다.
  * 역할별 정책은 다음과 같다.
  *
- * | 역할      | 권한                                                  |
- * |-----------|-------------------------------------------------------|
- * | SALES_REP | 본인 보고 작성·조회, 본인 댓글 수정·삭제, 고객 마스터 조회·등록 |
- * | MANAGER   | 직속 팀원 보고 조회·댓글, 고객 마스터 조회·등록            |
- * | ADMIN     | 영업 마스터 관리                                        |
+ * | 역할      | 권한                                                            |
+ * |-----------|-----------------------------------------------------------------|
+ * | SALES_REP | 본인 보고 작성·조회, 본인 보고에 대댓글, 본인 댓글 수정·삭제, 고객 마스터 조회·등록 |
+ * | MANAGER   | 직속 팀원의 제출된 보고 조회·댓글, 고객 마스터 조회·등록              |
+ * | ADMIN     | 영업 마스터 관리                                                  |
  *
  * DB 접근을 하지 않는 순수 함수로 둔다. 상급자 판정이나 보고 상태 판정에 필요한
  * 정보는 호출 측에서 조회해 넘긴다.
@@ -174,17 +174,48 @@ export function assertTeamScope(
   return [...requestedRepIds];
 }
 
+/** 댓글 권한 판정에 필요한 대상 보고의 최소 정보. */
+export interface CommentableReport {
+  /** 보고 작성자. 상급자 판정에 managerId가 필요하다. */
+  author: TargetRep;
+  status: ReportStatus;
+}
+
 /**
- * 보고 작성자 본인 또는 직속 상급자만 댓글을 작성할 수 있다. (TC-SEC-04)
+ * 제출된 보고에 대해 직속 상급자는 댓글과 대댓글을, 보고 작성자 본인은
+ * 대댓글만 작성할 수 있다. (FR-09, TC-SEC-04)
  *
- * 대댓글도 같은 규칙을 쓴다. 상급자 지적에 작성자가 답글을 다는 흐름(SCR-220)이
- * 본인 허용으로 성립한다. ADMIN은 영업 마스터 관리 역할이라 댓글 권한이 없다.
+ * 역할별 범위가 다른 이유는 사양이 둘을 나눠 적어 두었기 때문이다.
+ * API 명세 4.2는 "상급자(또는 대댓글의 경우 본인)"로 본인 허용을 답글에 한정하고,
+ * FR-09는 댓글 대상을 "제출된 일일보고"로 못박는다. 작성자가 자기 보고에
+ * 루트 댓글을 다는 것은 피드백 채널의 용도가 아니므로 막는다.
+ *
+ * `parentCommentId`는 요청 본문의 값을 그대로 넘긴다. 기본값을 두지 않아
+ * 호출 측이 댓글과 대댓글을 구분해 전달하도록 강제한다.
+ *
+ * 권한을 상태보다 먼저 판정한다. 권한 없는 호출자에게 409를 돌려주면 그 보고가
+ * 작성중이라는 사실이 드러나기 때문이다. ADMIN은 영업 마스터 관리 역할이라
+ * 댓글 권한이 없다.
  */
-export function assertCanComment(auth: AuthContext, reportAuthor: TargetRep): void {
-  if (isOwner(auth, reportAuthor.repId) || isManagerOf(auth, reportAuthor)) {
-    return;
+export function assertCanComment(
+  auth: AuthContext,
+  report: CommentableReport,
+  parentCommentId: bigint | null
+): void {
+  const isReply = parentCommentId !== null;
+  const allowed = isManagerOf(auth, report.author) || (isOwner(auth, report.author.repId) && isReply);
+
+  if (!allowed) {
+    throw forbidden("이 보고에 댓글을 작성할 권한이 없습니다.");
   }
-  throw forbidden("이 보고에 댓글을 작성할 권한이 없습니다.");
+
+  if (report.status !== "SUBMITTED") {
+    throw new AuthorizationError(
+      "REPORT_NOT_SUBMITTED",
+      "제출되지 않은 보고에는 댓글을 작성할 수 없습니다.",
+      409
+    );
+  }
 }
 
 /**

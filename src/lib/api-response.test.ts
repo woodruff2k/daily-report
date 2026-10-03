@@ -48,15 +48,15 @@ describe("authorizationErrorResponse — TC-SEC-05 내부 정보 미노출", () 
     expect(response.status).toBe(401);
   });
 
-  it("응답 본문에 스택트레이스나 오류 이름이 실리지 않는다", async () => {
+  it("응답 본문에 code·message 외의 항목이 실리지 않는다", async () => {
     const response = authorizationErrorResponse(
       new AuthorizationError("FORBIDDEN", "본인의 리소스가 아닙니다.", 403)
     );
-    const body = JSON.stringify(await response.json());
+    const body = (await response.json()) as { error: Record<string, unknown> };
 
-    expect(body).not.toContain("AuthorizationError");
-    expect(body).not.toContain("auth.ts");
-    expect(body).not.toContain("at ");
+    // 키 집합을 고정해 name·stack 같은 내부 정보가 덧붙는 회귀를 막는다.
+    expect(Object.keys(body).sort()).toEqual(["data", "error", "success"]);
+    expect(Object.keys(body.error).sort()).toEqual(["code", "message"]);
   });
 
   it("인가 오류가 아니면 다시 던져 500으로 뭉개지 않는다", () => {

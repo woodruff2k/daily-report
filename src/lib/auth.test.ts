@@ -165,25 +165,61 @@ describe("assertTeamScope — TC-SEC-02 팀 범위 밖 조회 차단", () => {
   });
 });
 
-describe("assertCanComment — TC-SEC-04 권한 없는 댓글 작성 차단", () => {
-  it("직속 상급자는 댓글을 쓸 수 있다", () => {
-    expect(() => assertCanComment(MANAGER, TEAM_MEMBER)).not.toThrow();
+describe("assertCanComment — FR-09 / TC-SEC-04 댓글 작성 권한", () => {
+  /** 루트 댓글. parentCommentId 없음. */
+  const ROOT = null;
+  /** 대댓글. 부모 댓글 commentId. */
+  const REPLY = 400n;
+
+  const SUBMITTED = { author: TEAM_MEMBER, status: "SUBMITTED" } as const;
+  const DRAFT = { author: TEAM_MEMBER, status: "DRAFT" } as const;
+  const OTHER_TEAM = { author: OTHER_TEAM_MEMBER, status: "SUBMITTED" } as const;
+
+  it("직속 상급자는 제출된 보고에 댓글을 쓸 수 있다", () => {
+    expect(() => assertCanComment(MANAGER, SUBMITTED, ROOT)).not.toThrow();
+  });
+
+  it("직속 상급자는 대댓글도 쓸 수 있다", () => {
+    expect(() => assertCanComment(MANAGER, SUBMITTED, REPLY)).not.toThrow();
   });
 
   it("보고 작성자 본인은 대댓글을 쓸 수 있다", () => {
-    expect(() => assertCanComment(SALES_REP, TEAM_MEMBER)).not.toThrow();
+    expect(() => assertCanComment(SALES_REP, SUBMITTED, REPLY)).not.toThrow();
+  });
+
+  it("보고 작성자 본인의 루트 댓글은 403으로 막는다", () => {
+    expectAuthError(() => assertCanComment(SALES_REP, SUBMITTED, ROOT), 403);
   });
 
   it("무관한 사원은 403으로 막는다", () => {
-    expectAuthError(() => assertCanComment(SALES_REP, OTHER_TEAM_MEMBER), 403);
+    expectAuthError(() => assertCanComment(SALES_REP, OTHER_TEAM, ROOT), 403);
   });
 
   it("다른 팀 상급자는 403으로 막는다", () => {
-    expectAuthError(() => assertCanComment(MANAGER, OTHER_TEAM_MEMBER), 403);
+    expectAuthError(() => assertCanComment(MANAGER, OTHER_TEAM, ROOT), 403);
   });
 
   it("관리자는 댓글 권한이 없다", () => {
-    expectAuthError(() => assertCanComment(ADMIN, TEAM_MEMBER), 403);
+    expectAuthError(() => assertCanComment(ADMIN, SUBMITTED, ROOT), 403);
+  });
+
+  it("제출되지 않은 보고에는 댓글을 쓸 수 없다", () => {
+    expectAuthError(() => assertCanComment(MANAGER, DRAFT, ROOT), 409);
+  });
+
+  it("작성중 보고를 막을 때 REPORT_NOT_SUBMITTED 코드를 돌려준다", () => {
+    try {
+      assertCanComment(MANAGER, DRAFT, ROOT);
+      expect.unreachable("오류가 발생해야 한다");
+    } catch (error) {
+      expect((error as AuthorizationError).code).toBe("REPORT_NOT_SUBMITTED");
+    }
+  });
+
+  it("권한이 없으면 작성중 여부를 알려주지 않고 403으로 막는다", () => {
+    const othersDraft = { author: OTHER_TEAM_MEMBER, status: "DRAFT" } as const;
+
+    expectAuthError(() => assertCanComment(SALES_REP, othersDraft, ROOT), 403);
   });
 });
 
