@@ -12,6 +12,7 @@ export const REP: SalesRep = {
   managerId: 2n,
   passwordHash: "$2a$10$synthetic.hash.value.for.tests.only.not.a.secret",
   role: "SALES_REP",
+  mustChangePassword: false,
   status: "ACTIVE",
   createdAt: new Date("2026-06-20T09:00:00.000Z"),
   updatedAt: new Date("2026-06-20T09:00:00.000Z"),

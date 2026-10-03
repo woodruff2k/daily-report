@@ -8,7 +8,12 @@ vi.mock("@/lib/jwt", () => ({
 import { verifyAccessToken } from "@/lib/jwt";
 import { proxy } from "./proxy";
 
-const PAYLOAD = { repId: "1", name: "홍길동", role: "SALES_REP" as const };
+const PAYLOAD = {
+  repId: "1",
+  name: "홍길동",
+  role: "SALES_REP" as const,
+  mustChangePassword: false,
+};
 
 function request(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`http://localhost${path}`, { headers });
@@ -99,5 +104,49 @@ describe("proxy — 공개 경로", () => {
   it("공개 경로가 아닌 /api/auth 하위는 보호된다", () => {
     // PUBLIC_API_PATHS 는 완전 일치다. 접두사 일치로 바뀌면 전부 열린다.
     expect(proxy(request("/api/auth/anything-else")).status).toBe(401);
+  });
+});
+
+describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
+  const MUST_CHANGE = { ...PAYLOAD, mustChangePassword: true };
+
+  beforeEach(() => {
+    vi.mocked(verifyAccessToken).mockReturnValue(MUST_CHANGE);
+  });
+
+  function bearer(path: string) {
+    return request(path, { authorization: "Bearer valid.token" });
+  }
+
+  it.each(["/api/reports", "/api/sales-reps", "/api/customers"])(
+    "%s 는 403 으로 막는다",
+    async (path) => {
+      const response = proxy(bearer(path));
+
+      // 화면이 변경 폼으로 보내주기를 기대하지 않고 서버에서 막는다.
+      expect(response.status).toBe(403);
+      expect((await errorBody(response))?.code).toBe("PASSWORD_CHANGE_REQUIRED");
+    }
+  );
+
+  it("비밀번호 변경 경로는 통과시킨다", () => {
+    // 이 경로까지 막으면 임시 비밀번호 상태를 풀 방법이 없다.
+    expect(proxy(bearer("/api/me/password")).status).toBe(200);
+  });
+
+  it("로그아웃은 통과시킨다", () => {
+    expect(proxy(bearer("/api/auth/logout")).status).toBe(200);
+  });
+
+  it("통과하는 경로에는 인증 헤더를 그대로 심는다", () => {
+    const response = proxy(bearer("/api/me/password"));
+
+    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe("1");
+  });
+
+  it("플래그가 내려가면 다시 통과한다", () => {
+    vi.mocked(verifyAccessToken).mockReturnValue(PAYLOAD);
+
+    expect(proxy(bearer("/api/sales-reps")).status).toBe(200);
   });
 });

@@ -18,10 +18,9 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
+import { MIN_PASSWORD_LENGTH } from "../src/lib/password-policy";
 
 const prisma = new PrismaClient();
-
-const MIN_PASSWORD_LENGTH = 12;
 
 function required(name: string): string {
   const value = process.env[name]?.trim();

@@ -54,13 +54,14 @@
 | 204 | 삭제 성공(본문 없음) |
 | 400 | 잘못된 요청(유효성 실패) |
 | 401 | 인증 필요/실패 |
-| 403 | 권한 없음 |
+| 403 | 권한 없음 (임시 비밀번호 미변경 시 `PASSWORD_CHANGE_REQUIRED` 포함) |
 | 404 | 리소스 없음 |
 | 409 | 충돌(중복 보고 등) |
 
 ### 1.5 권한 정책
 
 - 모든 권한은 **서버 측에서 검증**한다. 영업사원은 본인 보고만, 상급자는 소속 팀원 보고 조회·댓글, 관리자는 영업 마스터 관리.
+- **임시 비밀번호 상태에서는 비밀번호 변경과 로그아웃만 허용한다.** 토큰에 `mustChangePassword`가 담기고, 프록시가 그 외 모든 `/api/*` 요청을 403 `PASSWORD_CHANGE_REQUIRED`로 막는다. 화면이 변경 폼으로 보내주기를 기대하지 않는다.
 - **역할 간 상하 관계는 두지 않는다.** 관리자(ADMIN)가 영업사원의 보고를 조회할 수 없고, 상급자(MANAGER)가 영업 마스터를 관리할 수 없다. 각 역할은 요구사항 5.1의 담당 범위만 가진다.
 
 ---
@@ -84,14 +85,42 @@
   "success": true,
   "data": {
     "accessToken": "eyJhb...",
-    "rep": { "repId": 1, "name": "홍길동", "role": "SALES_REP" }
+    "rep": { "repId": 1, "name": "홍길동", "role": "SALES_REP" },
+    "mustChangePassword": false
   }
 }
 ```
 
+`mustChangePassword`가 `true`면 임시 비밀번호 상태다. 로그인 자체는 성공하고 토큰도 발급되지만(토큰이 없으면 비밀번호를 바꿀 수도 없다), 비밀번호를 바꾸기 전까지 다른 API는 403이다. 화면은 곧바로 비밀번호 변경으로 보낸다.
+
 ### 2.2 로그아웃
 
 `POST /api/auth/logout` — 응답 204
+
+### 2.3 비밀번호 변경 (본인)
+
+`PUT /api/me/password`
+
+요청
+
+```json
+{ "currentPassword": "********", "newPassword": "********" }
+```
+
+| 항목 | 규칙 |
+| :---- | :---- |
+| currentPassword | 필수. 틀리면 401 |
+| newPassword | 필수, 12자 이상 72자 이하. 기존과 같으면 400 |
+
+응답 200
+
+```json
+{ "success": true, "data": { "accessToken": "eyJhb..." } }
+```
+
+- 임시 비밀번호 상태를 푸는 유일한 경로다.
+- **현재 비밀번호를 함께 받는다.** 토큰만으로 변경을 허용하면 탈취한 토큰으로 계정을 가져갈 수 있다.
+- 성공 시 **새 토큰**을 돌려준다. 기존 토큰에는 `mustChangePassword`가 `true`로 박혀 있어 그대로 쓰면 계속 막힌다.
 
 ---
 
@@ -357,7 +386,20 @@
 
 - `empNo`, `email`은 유일값(중복 시 409).
 
-응답 201 — 생성된 영업 반환
+응답 201 — 생성된 영업 반환. `password`를 생략했으면 `temporaryPassword`가 함께 담긴다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "repId": 10, "empNo": "S2026001", "name": "홍길동", "role": "SALES_REP",
+    "temporaryPassword": "9Qx2...1회만 반환"
+  }
+}
+```
+
+- 평문은 저장되지 않으므로 **이 응답이 유일한 전달 경로다.** 다시 볼 수 없고, 분실 시 6.5로 재발급한다.
+- `password`를 직접 지정해도 **변경 강제는 동일하게 걸린다.** 관리자가 아는 값이기 때문이다.
 
 ### 6.3 영업 상세 / 수정
 
@@ -373,6 +415,23 @@
 
 `PATCH /api/sales-reps/{repId}/status` → 200
 
+### 6.5 임시 비밀번호 재발급
+
+`POST /api/sales-reps/{repId}/password/reset`
+
+응답 200
+
+```json
+{
+  "success": true,
+  "data": { "repId": 10, "empNo": "S2026001", "temporaryPassword": "9Qx2...1회만 반환" }
+}
+```
+
+- 관리자 전용. 비밀번호를 잊은 사원의 계정을 다시 쓸 수 있게 한다.
+- 관리자는 기존 비밀번호를 알 수 없다(해시만 저장한다). 확인이 아니라 **재발급**이다.
+- 발급 후 `mustChangePassword`가 서고, 본인이 바꿀 때까지 다른 API는 403이다.
+
 ---
 
 ## 7\. 엔드포인트 요약
@@ -381,6 +440,7 @@
 | :---- | :---- | :---- | :---- |
 | 인증 | POST | /api/auth/login | 로그인 |
 | 인증 | POST | /api/auth/logout | 로그아웃 |
+| 인증 | PUT | /api/me/password | 본인 비밀번호 변경 |
 | 일일보고 | GET | /api/reports | 본인 보고 목록 |
 | 일일보고 | POST | /api/reports | 오늘자 보고 생성 |
 | 일일보고 | GET | /api/reports/{reportId} | 상세 |
@@ -401,4 +461,5 @@
 | 영업 | GET | /api/sales-reps/{repId} | 상세 |
 | 영업 | PUT | /api/sales-reps/{repId} | 수정 |
 | 영업 | PATCH | /api/sales-reps/{repId}/status | 비활성화 |
+| 영업 | POST | /api/sales-reps/{repId}/password/reset | 임시 비밀번호 재발급 |
 

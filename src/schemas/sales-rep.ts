@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
 
 /**
  * 영업 마스터 입력 검증. (FR-02, API 명세 6)
@@ -37,10 +38,10 @@ export const salesRepCreateSchema = z.object({
   role: roleSchema.default("SALES_REP"),
   status: repStatusSchema.default("ACTIVE"),
   /**
-   * 선택 항목. 생략하면 로그인할 수 없는 계정으로 만들어진다.
-   * API 명세 6.2의 요청 예시에 비밀번호가 없어 필수로 두지 않았다.
+   * 선택 항목. 생략하면 서버가 임시 비밀번호를 만들어 응답에 1회 반환한다.
+   * 어느 경우든 최초 로그인 시 변경을 강제한다. (이슈 #44)
    */
-  password: z.string().min(8).max(72).optional(),
+  password: z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH).optional(),
 });
 
 /**

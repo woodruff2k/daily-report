@@ -13,21 +13,21 @@ afterEach(() => {
 
 describe("jwt", () => {
   it("signs and verifies a token round-trip", () => {
-    const payload = { repId: "1", name: "홍길동", role: "SALES_REP" as const };
+    const payload = { repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false };
     const token = signAccessToken(payload);
     const decoded = verifyAccessToken(token);
     expect(decoded).toMatchObject(payload);
   });
 
   it("throws on a tampered token", () => {
-    const token = signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const });
+    const token = signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false });
     expect(() => verifyAccessToken(`${token}tampered`)).toThrow();
   });
 
   it("throws when JWT_SECRET is not set", () => {
     delete process.env.JWT_SECRET;
     expect(() =>
-      signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const })
+      signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false })
     ).toThrow("JWT_SECRET");
   });
 });

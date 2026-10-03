@@ -60,6 +60,9 @@ model SalesRep {
   position   String?
   managerId  BigInt?   @map("manager_id")
   passwordHash String  @map("password_hash")
+  // 관리자가 발급한 임시 비밀번호 상태. true 면 본인이 바꾸기 전까지
+  // 비밀번호 변경 외의 API 를 쓸 수 없다. (이슈 #44)
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   role       Role      @default(SALES_REP)
   status     RepStatus @default(ACTIVE)
   createdAt  DateTime  @default(now()) @map("created_at")

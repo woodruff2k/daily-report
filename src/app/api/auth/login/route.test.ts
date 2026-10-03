@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACTIVE_REP,
   INACTIVE_REP,
+  MUST_CHANGE_REP,
   PASSWORD,
   jsonRequest,
   readBody,
@@ -46,16 +47,18 @@ describe("POST /api/auth/login — TC-AUTH-01 정상 로그인", () => {
     expect(body.data).toEqual({
       accessToken: "signed.access.token",
       rep: { repId: "1", name: "홍길동", role: "SALES_REP" },
+      mustChangePassword: false,
     });
   });
 
-  it("토큰 payload 에 repId·name·role 을 담는다", async () => {
+  it("토큰 payload 에 repId·name·role·비밀번호 변경 여부를 담는다", async () => {
     await login({ loginId: ACTIVE_REP.email, password: PASSWORD });
 
     expect(signAccessToken).toHaveBeenCalledWith({
       repId: "1",
       name: "홍길동",
       role: "SALES_REP",
+      mustChangePassword: false,
     });
   });
 
@@ -156,5 +159,28 @@ describe("POST /api/auth/login — 입력 검증", () => {
     const response = await POST(request as never);
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/auth/login — 임시 비밀번호 상태 (#44)", () => {
+  it("변경이 필요하면 응답과 토큰에 모두 표시한다", async () => {
+    vi.mocked(prisma.salesRep.findFirst).mockResolvedValue(MUST_CHANGE_REP);
+
+    const response = await login({ loginId: MUST_CHANGE_REP.email, password: PASSWORD });
+
+    expect(response.status).toBe(200);
+    expect((await readBody(response)).data).toMatchObject({ mustChangePassword: true });
+    expect(signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ mustChangePassword: true })
+    );
+  });
+
+  it("로그인 자체를 막지는 않는다", async () => {
+    vi.mocked(prisma.salesRep.findFirst).mockResolvedValue(MUST_CHANGE_REP);
+
+    // 토큰이 없으면 비밀번호를 바꿀 수도 없다. 다른 API 차단은 프록시가 한다.
+    const body = await readBody(await login({ loginId: MUST_CHANGE_REP.email, password: PASSWORD }));
+
+    expect(body.data?.accessToken).toBe("signed.access.token");
   });
 });
