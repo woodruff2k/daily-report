@@ -1,10 +1,9 @@
-import { randomBytes } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { apiErrorResponse, apiSuccess } from "@/lib/api-response";
 import { assertRole, parseAuthContext } from "@/lib/auth";
 import { ValidationError } from "@/lib/errors";
 import { pageResponse, parsePageRequest } from "@/lib/pagination";
-import { hashPassword } from "@/lib/password";
+import { generateTemporaryPassword, hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
 import { assertManagerExists, toSalesRepResponse } from "@/lib/sales-rep";
@@ -71,19 +70,30 @@ export async function POST(request: NextRequest) {
       await assertManagerExists(BigInt(managerId));
     }
 
+    // 비밀번호를 받지 않았으면 임시 비밀번호를 만들어 응답에 1회 담는다.
+    // 관리자가 본인에게 전달하고, 본인이 바꿀 때까지 다른 API 는 막힌다.
+    const plainPassword = password ?? generateTemporaryPassword();
+    const temporaryPassword = password === undefined ? plainPassword : null;
+
     const created = await prisma.salesRep.create({
       data: {
         ...fields,
         managerId: managerId === undefined ? null : BigInt(managerId),
-        // 비밀번호를 받지 않았으면 아무도 모르는 값으로 채운다. 고정값을 두면
-        // 등록된 계정 전체가 같은 비밀번호로 로그인 가능해진다.
-        passwordHash: await hashPassword(
-          password ?? randomBytes(32).toString("hex")
-        ),
+        passwordHash: await hashPassword(plainPassword),
+        // 관리자가 직접 지정한 비밀번호도 관리자가 알고 있는 값이므로
+        // 똑같이 변경을 강제한다.
+        mustChangePassword: true,
       },
     });
 
-    return apiSuccess(toSalesRepResponse(created), 201);
+    return apiSuccess(
+      {
+        ...toSalesRepResponse(created),
+        // 평문은 저장하지 않는다. 이 응답이 유일한 전달 경로다. (NFR-04)
+        ...(temporaryPassword === null ? {} : { temporaryPassword }),
+      },
+      201
+    );
   } catch (error) {
     return apiErrorResponse(mapSalesRepWriteError(error));
   }

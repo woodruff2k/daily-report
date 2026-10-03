@@ -23,10 +23,11 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/password", () => ({
   hashPassword: vi.fn((password: string) => Promise.resolve(`hashed:${password}`)),
+  generateTemporaryPassword: vi.fn(() => "generated-temp-password-xyz"),
 }));
 
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/password";
+import { generateTemporaryPassword, hashPassword } from "@/lib/password";
 import { GET, POST } from "./route";
 
 const URL = "http://localhost/api/sales-reps";
@@ -51,6 +52,7 @@ beforeEach(() => {
   vi.mocked(prisma.salesRep.create).mockReset().mockResolvedValue(REP);
   vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(hashPassword).mockClear();
+  vi.mocked(generateTemporaryPassword).mockClear();
 });
 
 describe("GET /api/sales-reps", () => {
@@ -193,18 +195,17 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
 
   it("비밀번호를 받으면 해시해서 저장한다", async () => {
     await POST(
-      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "longenough1" } })
+      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "longenough-123" } })
     );
 
-    expect(hashPassword).toHaveBeenCalledWith("longenough1");
+    expect(hashPassword).toHaveBeenCalledWith("longenough-123");
   });
 
-  it("비밀번호를 생략하면 아무도 모르는 무작위 값으로 채운다", async () => {
+  it("비밀번호를 생략하면 임시 비밀번호를 만들어 해시한다", async () => {
     await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
 
-    // 고정값을 쓰면 등록된 계정이 모두 같은 비밀번호로 로그인 가능해진다.
-    const [generated] = vi.mocked(hashPassword).mock.calls[0];
-    expect(generated).toMatch(/^[0-9a-f]{64}$/);
+    expect(generateTemporaryPassword).toHaveBeenCalled();
+    expect(hashPassword).toHaveBeenCalledWith("generated-temp-password-xyz");
   });
 
   it.each([
@@ -276,6 +277,49 @@ describe("POST /api/sales-reps — role 설정 (#48)", () => {
 
     expect(response.status).toBe(400);
     expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
+    expect(prisma.salesRep.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
+  it("비밀번호를 생략하면 임시 비밀번호를 응답에 1회 담는다", async () => {
+    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+
+    // 평문은 저장되지 않으므로 이 응답이 유일한 전달 경로다.
+    expect((await readBody(response)).data).toMatchObject({
+      temporaryPassword: "generated-temp-password-xyz",
+    });
+  });
+
+  it("비밀번호를 직접 지정하면 임시 비밀번호를 담지 않는다", async () => {
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "longenough-123" } })
+    );
+
+    expect(await readBody(response).then((b) => b.data)).not.toHaveProperty(
+      "temporaryPassword"
+    );
+    expect(generateTemporaryPassword).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["생략했을 때", CREATE_BODY],
+    ["직접 지정했을 때", { ...CREATE_BODY, password: "longenough-123" }],
+  ])("비밀번호를 %s 모두 변경을 강제한다", async (_label, body) => {
+    // 관리자가 지정한 값도 관리자가 아는 값이다.
+    await POST(asAdmin(URL, { method: "POST", body }));
+
+    expect(prisma.salesRep.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ mustChangePassword: true }) })
+    );
+  });
+
+  it("12자 미만 비밀번호는 400 이다", async () => {
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "short-11ch" } })
+    );
+
+    expect(response.status).toBe(400);
     expect(prisma.salesRep.create).not.toHaveBeenCalled();
   });
 });

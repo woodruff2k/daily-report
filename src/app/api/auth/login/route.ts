@@ -35,10 +35,14 @@ export async function POST(request: NextRequest) {
     repId: rep.repId.toString(),
     name: rep.name,
     role: rep.role,
+    mustChangePassword: rep.mustChangePassword,
   });
 
+  // mustChangePassword 가 true 면 화면은 비밀번호 변경으로 보내야 한다.
+  // 화면을 믿지 않고 프록시가 다른 API 를 막는다. (NFR-01, 이슈 #44)
   return apiSuccess({
     accessToken,
     rep: { repId: rep.repId.toString(), name: rep.name, role: rep.role },
+    mustChangePassword: rep.mustChangePassword,
   });
 }

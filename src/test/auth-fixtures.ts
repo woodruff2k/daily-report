@@ -12,12 +12,16 @@ export const ACTIVE_REP: SalesRep = {
   managerId: 2n,
   passwordHash: "$2a$10$synthetic.hash.value.for.tests.only.not.a.secret",
   role: "SALES_REP",
+  mustChangePassword: false,
   status: "ACTIVE",
   createdAt: new Date("2026-06-20T09:00:00.000Z"),
   updatedAt: new Date("2026-06-20T09:00:00.000Z"),
 };
 
 export const INACTIVE_REP: SalesRep = { ...ACTIVE_REP, status: "INACTIVE" };
+
+/** 관리자가 임시 비밀번호를 발급한 상태. 본인이 바꿔야 한다. (이슈 #44) */
+export const MUST_CHANGE_REP: SalesRep = { ...ACTIVE_REP, mustChangePassword: true };
 
 /** 테스트 전용 더미 비밀번호. 실제 자격증명이 아니다. */
 export const PASSWORD = "synthetic-password";
