@@ -10,6 +10,14 @@ import { z } from "zod";
 const repStatusSchema = z.enum(["ACTIVE", "INACTIVE"]);
 
 /**
+ * 역할. 인가 판정의 근거이므로(#4) 등록·수정에서 명시적으로 받는다.
+ *
+ * 이 엔드포인트 자체가 ADMIN 전용이라 역할을 올리는 요청은 관리자만 보낼 수 있다.
+ * 기본값을 SALES_REP 로 둬서 API 명세 6.2 의 요청 예시(역할 없음)도 통과한다.
+ */
+const roleSchema = z.enum(["SALES_REP", "MANAGER", "ADMIN"]);
+
+/**
  * 식별자는 JSON 숫자(API 명세 6.2)로 오지만 DB는 BigInt다.
  * 안전 정수 범위를 넘는 값은 변환 과정에서 정밀도를 잃으므로 미리 막는다.
  */
@@ -26,6 +34,7 @@ export const salesRepCreateSchema = z.object({
   department: z.string().trim().max(100).optional(),
   position: z.string().trim().max(100).optional(),
   managerId: repIdSchema.optional(),
+  role: roleSchema.default("SALES_REP"),
   status: repStatusSchema.default("ACTIVE"),
   /**
    * 선택 항목. 생략하면 로그인할 수 없는 계정으로 만들어진다.
@@ -34,8 +43,20 @@ export const salesRepCreateSchema = z.object({
   password: z.string().min(8).max(72).optional(),
 });
 
-/** 전체 필드 수정. PUT이므로 생성과 같은 필수 항목을 요구한다. (API 명세 6.3) */
-export const salesRepUpdateSchema = salesRepCreateSchema.omit({ password: true });
+/**
+ * 전체 필드 수정. (API 명세 6.3)
+ *
+ * `role`·`status`는 생성과 달리 **기본값을 두지 않고 필수로 받는다.** PUT은 전체
+ * 교체이므로 기본값이 적용되면 보내지 않은 필드가 조용히 바뀐다. `role`을 빼면
+ * MANAGER가 SALES_REP로 강등되고, `status`를 빼면 비활성 계정이 다시 활성화된다.
+ * 둘 다 부서명만 고치려던 요청이 권한을 바꿔버리는 경우다.
+ *
+ * 화면(SCR-510)에서 역할·상태는 모두 필수 항목이므로 정상 요청은 영향이 없다.
+ */
+export const salesRepUpdateSchema = salesRepCreateSchema.omit({ password: true }).extend({
+  role: roleSchema,
+  status: repStatusSchema,
+});
 
 /** 비활성화. 상태 전환만 허용한다. (NFR-03, API 명세 6.4) */
 export const salesRepStatusSchema = z.object({

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MANAGER_REP,
   REP,
   asAdmin,
   asSalesRep,
@@ -29,6 +30,7 @@ const UPDATE_BODY = {
   department: "영업2팀",
   position: "과장",
   managerId: 2,
+  role: "SALES_REP",
   status: "ACTIVE",
 };
 
@@ -37,12 +39,13 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(REP);
+  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(REP);
 });
 
 describe("GET /api/sales-reps/{repId}", () => {
   it("관리자는 상세를 조회한다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
     const response = await GET(asAdmin(URL), params("1"));
     const body = await readBody(response);
 
@@ -52,6 +55,7 @@ describe("GET /api/sales-reps/{repId}", () => {
   });
 
   it("응답에 비밀번호 해시가 들어가지 않는다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
     const response = await GET(asAdmin(URL), params("1"));
 
     expect(JSON.stringify(await readBody(response))).not.toContain("$2a$");
@@ -170,5 +174,34 @@ describe("PUT /api/sales-reps/{repId}", () => {
 
     expect(response.status).toBe(403);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌지 않는다 (#48)", () => {
+  it.each([
+    ["role", "역할"],
+    ["status", "상태"],
+  ])("%s 를 빼면 400 이다", async (field) => {
+    const body: Record<string, unknown> = { ...UPDATE_BODY };
+    delete body[field];
+
+    const response = await PUT(asAdmin(URL, { method: "PUT", body }), params("1"));
+
+    // 기본값이 적용되면 MANAGER 가 SALES_REP 로 강등되거나
+    // 비활성 계정이 다시 활성화된다. 부서명만 고치려던 요청이 권한을 바꾼다.
+    expect(response.status).toBe(400);
+    expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+
+  it("역할을 명시하면 그 값으로 바꾼다", async () => {
+    await PUT(
+      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, role: "MANAGER" } }),
+      params("1")
+    );
+
+    expect(prisma.salesRep.update).toHaveBeenCalledWith({
+      where: { repId: 1n },
+      data: expect.objectContaining({ role: "MANAGER" }),
+    });
   });
 });

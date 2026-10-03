@@ -16,6 +16,7 @@ export interface SalesRepResponse {
   department: string | null;
   position: string | null;
   managerId: number | null;
+  role: SalesRep["role"];
   status: SalesRep["status"];
   createdAt: string;
   updatedAt: string;
@@ -37,6 +38,7 @@ export function toSalesRepResponse(rep: SalesRep): SalesRepResponse {
     department: rep.department,
     position: rep.position,
     managerId: rep.managerId === null ? null : Number(rep.managerId),
+    role: rep.role,
     status: rep.status,
     createdAt: rep.createdAt.toISOString(),
     updatedAt: rep.updatedAt.toISOString(),
@@ -63,13 +65,23 @@ export async function assertManagerExists(
 
   const manager = await prisma.salesRep.findUnique({
     where: { repId: managerId },
-    select: { repId: true },
+    select: { repId: true, role: true },
   });
 
   if (!manager) {
     throw new ValidationError(
       "상급자로 지정한 영업사원을 찾을 수 없습니다.",
       "MANAGER_NOT_FOUND"
+    );
+  }
+
+  // managerId 와 role 이 어긋나면 데이터상 상급자인데 권한은 없는 상태가 된다.
+  // isManagerOf 가 호출자의 role 이 MANAGER 일 것을 요구하므로(#4), 역할이
+  // SALES_REP 인 사람을 상급자로 두면 팀 보고 조회·댓글이 전부 403 이 된다.
+  if (manager.role !== "MANAGER") {
+    throw new ValidationError(
+      "상급자로 지정할 사원의 역할이 MANAGER 여야 합니다.",
+      "MANAGER_ROLE_REQUIRED"
     );
   }
 }

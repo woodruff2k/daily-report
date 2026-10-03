@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MANAGER_REP,
   REP,
   asAdmin,
   asSalesRep,
@@ -48,7 +49,7 @@ beforeEach(() => {
   vi.mocked(prisma.salesRep.findMany).mockReset().mockResolvedValue([REP]);
   vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
   vi.mocked(prisma.salesRep.create).mockReset().mockResolvedValue(REP);
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(REP);
+  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(hashPassword).mockClear();
 });
 
@@ -221,6 +222,60 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
     const response = await POST(asSalesRep(URL, { method: "POST", body: CREATE_BODY }));
 
     expect(response.status).toBe(403);
+    expect(prisma.salesRep.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/sales-reps — role 설정 (#48)", () => {
+  it("역할을 지정하지 않으면 SALES_REP 로 만든다", async () => {
+    await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+
+    expect(prisma.salesRep.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: "SALES_REP" }) })
+    );
+  });
+
+  it.each(["MANAGER", "ADMIN"])("관리자는 %s 계정을 만들 수 있다", async (role) => {
+    await POST(asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, role } }));
+
+    expect(prisma.salesRep.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role }) })
+    );
+  });
+
+  it("정의되지 않은 역할은 400 이다", async () => {
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, role: "SUPERUSER" } })
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.salesRep.create).not.toHaveBeenCalled();
+  });
+
+  it("영업사원은 ADMIN 계정을 만들 수 없다 (권한 상승 방어)", async () => {
+    const response = await POST(
+      asSalesRep(URL, { method: "POST", body: { ...CREATE_BODY, role: "ADMIN" } })
+    );
+
+    expect(response.status).toBe(403);
+    expect(prisma.salesRep.create).not.toHaveBeenCalled();
+  });
+
+  it("응답에 역할을 담는다", async () => {
+    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+
+    // 관리 화면이 역할을 보여줘야 수정할 수 있다.
+    expect((await readBody(response)).data).toMatchObject({ role: "SALES_REP" });
+  });
+
+  it("상급자의 역할이 MANAGER 가 아니면 400 이다", async () => {
+    // managerId 와 role 이 어긋나면 데이터상 상급자인데 권한은 없는 상태가 된다.
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
+
+    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+
+    expect(response.status).toBe(400);
+    expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
     expect(prisma.salesRep.create).not.toHaveBeenCalled();
   });
 });

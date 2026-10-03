@@ -25,6 +25,23 @@ async function findOrCreateCustomer(data: {
 async function main() {
   const passwordHash = await hashPassword(SEED_PASSWORD);
 
+  // 영업 마스터 API(/api/sales-reps)는 ADMIN 전용이다. 관리자 계정이 없으면
+  // 로컬에서 그 API를 한 번도 호출할 수 없다. (이슈 #48)
+  await prisma.salesRep.upsert({
+    where: { empNo: "S2026000" },
+    update: {},
+    create: {
+      empNo: "S2026000",
+      name: "시스템관리자",
+      email: "test-admin@example.com",
+      department: "영업관리",
+      position: "관리자",
+      passwordHash,
+      role: "ADMIN",
+      status: "ACTIVE",
+    },
+  });
+
   const manager = await prisma.salesRep.upsert({
     where: { empNo: "S2026001" },
     update: {},

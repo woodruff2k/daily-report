@@ -75,11 +75,26 @@ describe("salesRepCreateSchema", () => {
 });
 
 describe("salesRepUpdateSchema", () => {
+  /** 수정은 role·status 를 필수로 받는다. 생성용 VALID 에는 role 이 없다. */
+  const UPDATE_VALID = { ...VALID, role: "SALES_REP" };
+
   it("password 를 받지 않는다", () => {
-    const result = salesRepUpdateSchema.safeParse({ ...VALID, password: "longenough1" });
+    const result = salesRepUpdateSchema.safeParse({
+      ...UPDATE_VALID,
+      password: "longenough1",
+    });
 
     expect(result.success).toBe(true);
     expect(result.data).not.toHaveProperty("password");
+  });
+
+  it.each(["role", "status"])("%s 는 필수다 — 기본값으로 메우지 않는다", (field) => {
+    const payload: Record<string, unknown> = { ...UPDATE_VALID };
+    delete payload[field];
+
+    // 생성과 달리 기본값을 두지 않는다. PUT 은 전체 교체라 기본값이 적용되면
+    // 보내지 않은 필드가 조용히 바뀐다.
+    expect(salesRepUpdateSchema.safeParse(payload).success).toBe(false);
   });
 });
 
@@ -90,5 +105,27 @@ describe("salesRepStatusSchema", () => {
 
   it("그 외 값은 거부한다", () => {
     expect(salesRepStatusSchema.safeParse({ status: "DELETED" }).success).toBe(false);
+  });
+});
+
+describe("salesRepCreateSchema — role (#48)", () => {
+  it("역할을 생략하면 SALES_REP 다", () => {
+    expect(salesRepCreateSchema.safeParse(VALID).data?.role).toBe("SALES_REP");
+  });
+
+  it.each(["SALES_REP", "MANAGER", "ADMIN"])("%s 를 받는다", (role) => {
+    expect(salesRepCreateSchema.safeParse({ ...VALID, role }).success).toBe(true);
+  });
+
+  it.each(["SUPERUSER", "admin", ""])("정의되지 않은 역할(%s)은 거부한다", (role) => {
+    expect(salesRepCreateSchema.safeParse({ ...VALID, role }).success).toBe(false);
+  });
+});
+
+describe("salesRepUpdateSchema — role (#48)", () => {
+  it("수정에서도 역할을 받는다", () => {
+    expect(salesRepUpdateSchema.safeParse({ ...VALID, role: "MANAGER" }).data?.role).toBe(
+      "MANAGER"
+    );
   });
 });

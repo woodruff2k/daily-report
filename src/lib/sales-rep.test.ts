@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { REP } from "@/test/sales-rep-fixtures";
+import { MANAGER_REP, REP } from "@/test/sales-rep-fixtures";
 
 vi.mock("./prisma", () => ({
   prisma: { salesRep: { findUnique: vi.fn() } },
@@ -23,6 +23,7 @@ describe("toSalesRepResponse — NFR-04", () => {
       "name",
       "position",
       "repId",
+      "role",
       "status",
       "updatedAt",
     ]);
@@ -45,19 +46,26 @@ describe("toSalesRepResponse — NFR-04", () => {
     expect(toSalesRepResponse(REP).createdAt).toBe("2026-06-20T09:00:00.000Z");
   });
 
-  it("role 을 내보내지 않는다", () => {
-    // 권한 판정은 토큰으로 한다. 마스터 응답에 역할을 실을 이유가 없다.
-    expect(toSalesRepResponse(REP)).not.toHaveProperty("role");
+  it("role 을 내보낸다 (#48)", () => {
+    // 관리자가 역할을 확인하고 수정할 수 있어야 SCR-500·510 이 성립한다.
+    expect(toSalesRepResponse(REP).role).toBe("SALES_REP");
   });
 });
 
 describe("assertManagerExists", () => {
   beforeEach(() => {
-    vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(REP);
+    vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   });
 
-  it("존재하는 사원이면 통과한다", async () => {
+  it("역할이 MANAGER 인 사원이면 통과한다", async () => {
     await expect(assertManagerExists(2n)).resolves.toBeUndefined();
+  });
+
+  it("역할이 MANAGER 가 아니면 400 으로 막는다 (#48)", async () => {
+    // managerId 와 role 이 어긋나면 팀 보고 조회·댓글이 전부 403 이 된다.
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
+
+    await expect(assertManagerExists(1n)).rejects.toThrow(ValidationError);
   });
 
   it("없는 사원이면 400으로 막는다", async () => {
