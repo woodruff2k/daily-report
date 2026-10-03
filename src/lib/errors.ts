@@ -31,3 +31,22 @@ export class ConflictError extends HttpError {
     super(code, message, 409);
   }
 }
+
+/**
+ * 입력 검증 실패. 400.
+ *
+ * Zod 검증 실패나 경로·쿼리 파라미터 형식 오류에 쓴다. 메시지는 호출자에게
+ * 그대로 노출되므로 어떤 값이 잘못됐는지까지만 적고 내부 구조는 담지 않는다.
+ */
+export class ValidationError extends HttpError {
+  constructor(message: string, code = "INVALID_REQUEST") {
+    super(code, message, 400);
+  }
+}
+
+/** 리소스 없음. 404. */
+export class NotFoundError extends HttpError {
+  constructor(message: string, code = "NOT_FOUND") {
+    super(code, message, 404);
+  }
+}
