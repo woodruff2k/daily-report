@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { signAccessToken } from "@/lib/jwt";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { toJsonId } from "@/lib/identifier";
 import { loginRequestSchema } from "@/schemas/auth";
 
 export async function POST(request: NextRequest) {
@@ -43,7 +44,9 @@ export async function POST(request: NextRequest) {
   // 화면을 믿지 않고 프록시가 다른 API 를 막는다. (NFR-01, 이슈 #44)
   return apiSuccess({
     accessToken,
-    rep: { repId: rep.repId.toString(), name: rep.name, role: rep.role },
+    // 응답 식별자는 JSON 숫자다(API 명세 1.2). 토큰 payload 는 문자열로
+    // 두는데, JWT 클레임은 외부 응답이 아니고 프록시가 BigInt 로 되돌린다.
+    rep: { repId: toJsonId(rep.repId), name: rep.name, role: rep.role },
     mustChangePassword: rep.mustChangePassword,
   });
 }
