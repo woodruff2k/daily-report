@@ -14,23 +14,9 @@
  * 정보는 호출 측에서 조회해 넘긴다.
  */
 
-import type { ReportStatus, Role } from "@/types/auth";
-
-/**
- * 인가 실패를 나타내는 오류.
- * 라우트 핸들러에서 잡아 `apiError(code, message, status)`로 변환한다.
- */
-export class AuthorizationError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(code: string, message: string, status: number) {
-    super(message);
-    this.name = "AuthorizationError";
-    this.code = code;
-    this.status = status;
-  }
-}
+import type { Role } from "@/types/auth";
+import type { ReportStatus } from "@/types/report";
+import { AuthorizationError, ConflictError } from "./errors";
 
 function unauthorized(message: string): AuthorizationError {
   return new AuthorizationError("UNAUTHORIZED", message, 401);
@@ -210,10 +196,9 @@ export function assertCanComment(
   }
 
   if (report.status !== "SUBMITTED") {
-    throw new AuthorizationError(
+    throw new ConflictError(
       "REPORT_NOT_SUBMITTED",
-      "제출되지 않은 보고에는 댓글을 작성할 수 없습니다.",
-      409
+      "제출되지 않은 보고에는 댓글을 작성할 수 없습니다."
     );
   }
 }
@@ -239,14 +224,14 @@ export interface EditableReport {
 /**
  * 작성자 본인의 DRAFT 보고만 수정할 수 있다. (TC-SUB-03)
  *
- * 타인 보고는 403, 제출된 보고는 409로 구분해 막는다. 둘 다 AuthorizationError로
- * 던져 라우트에서 한 번에 받는다. 409는 인가 실패가 아니라 상태 충돌이지만,
- * 수정 가능 여부를 한 곳에서 판정하기 위해 같은 오류 형태로 둔다.
+ * 타인 보고는 AuthorizationError(403), 제출된 보고는 ConflictError(409)로
+ * 구분해 막는다. 권한 부족과 상태 충돌은 다른 사건이므로 타입을 나누고,
+ * 둘 다 HttpError라서 라우트에서는 한 번에 받는다.
  */
 export function assertReportEditable(auth: AuthContext, report: EditableReport): void {
   assertOwner(auth, report.repId);
 
   if (report.status !== "DRAFT") {
-    throw new AuthorizationError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.", 409);
+    throw new ConflictError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.");
   }
 }

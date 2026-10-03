@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  AuthorizationError,
   assertAnyRole,
   assertCanComment,
   assertCommentAuthor,
@@ -15,6 +14,7 @@ import {
   parseAuthContext,
   type AuthContext,
 } from "./auth";
+import { AuthorizationError, ConflictError, HttpError } from "./errors";
 
 const SALES_REP: AuthContext = { repId: 1n, role: "SALES_REP" };
 const MANAGER: AuthContext = { repId: 2n, role: "MANAGER" };
@@ -29,12 +29,16 @@ function headers(entries: Record<string, string>): Headers {
   return new Headers(entries);
 }
 
-function expectAuthError(fn: () => unknown, status: number) {
-  expect(fn).toThrow(AuthorizationError);
+function expectHttpError(
+  fn: () => unknown,
+  status: number,
+  type: typeof HttpError = AuthorizationError
+) {
+  expect(fn).toThrow(type);
   try {
     fn();
   } catch (error) {
-    expect((error as AuthorizationError).status).toBe(status);
+    expect((error as HttpError).status).toBe(status);
   }
 }
 
@@ -47,18 +51,18 @@ describe("parseAuthContext", () => {
   });
 
   it("헤더가 없으면 401로 막는다", () => {
-    expectAuthError(() => parseAuthContext(headers({})), 401);
+    expectHttpError(() => parseAuthContext(headers({})), 401);
   });
 
   it("역할 값이 정의되지 않은 것이면 401로 막는다", () => {
-    expectAuthError(
+    expectHttpError(
       () => parseAuthContext(headers({ "x-user-rep-id": "1", "x-user-role": "SUPERUSER" })),
       401
     );
   });
 
   it("사원 식별자가 숫자가 아니면 401로 막는다", () => {
-    expectAuthError(
+    expectHttpError(
       () => parseAuthContext(headers({ "x-user-rep-id": "abc", "x-user-role": "SALES_REP" })),
       401
     );
@@ -73,7 +77,7 @@ describe("isOwner / assertOwner", () => {
 
   it("타인 리소스는 403으로 막는다", () => {
     expect(isOwner(SALES_REP, 99n)).toBe(false);
-    expectAuthError(() => assertOwner(SALES_REP, 99n), 403);
+    expectHttpError(() => assertOwner(SALES_REP, 99n), 403);
   });
 });
 
@@ -85,7 +89,7 @@ describe("isManagerOf / assertManagerOf", () => {
 
   it("다른 팀의 상급자는 403으로 막는다", () => {
     expect(isManagerOf(MANAGER, OTHER_TEAM_MEMBER)).toBe(false);
-    expectAuthError(() => assertManagerOf(MANAGER, OTHER_TEAM_MEMBER), 403);
+    expectHttpError(() => assertManagerOf(MANAGER, OTHER_TEAM_MEMBER), 403);
   });
 
   it("상급자 역할이 아니면 관계가 맞아도 막는다", () => {
@@ -109,11 +113,11 @@ describe("assertOwnerOrManager — TC-SEC-01 타인 보고 조회 차단", () =>
 
   it("무관한 사원은 403으로 막는다", () => {
     const stranger: AuthContext = { repId: 8n, role: "SALES_REP" };
-    expectAuthError(() => assertOwnerOrManager(stranger, TEAM_MEMBER), 403);
+    expectHttpError(() => assertOwnerOrManager(stranger, TEAM_MEMBER), 403);
   });
 
   it("다른 팀 상급자는 403으로 막는다", () => {
-    expectAuthError(() => assertOwnerOrManager(MANAGER, OTHER_TEAM_MEMBER), 403);
+    expectHttpError(() => assertOwnerOrManager(MANAGER, OTHER_TEAM_MEMBER), 403);
   });
 });
 
@@ -123,11 +127,11 @@ describe("assertRole — TC-SEC-03 마스터 등록 차단", () => {
   });
 
   it("영업사원의 관리자 전용 작업은 403으로 막는다", () => {
-    expectAuthError(() => assertRole(SALES_REP, "ADMIN"), 403);
+    expectHttpError(() => assertRole(SALES_REP, "ADMIN"), 403);
   });
 
   it("상급자여도 관리자 전용 작업은 막는다", () => {
-    expectAuthError(() => assertRole(MANAGER, "ADMIN"), 403);
+    expectHttpError(() => assertRole(MANAGER, "ADMIN"), 403);
   });
 });
 
@@ -137,7 +141,7 @@ describe("assertAnyRole", () => {
   });
 
   it("허용 목록에 없으면 403으로 막는다", () => {
-    expectAuthError(() => assertAnyRole(SALES_REP, ["MANAGER", "ADMIN"]), 403);
+    expectHttpError(() => assertAnyRole(SALES_REP, ["MANAGER", "ADMIN"]), 403);
   });
 });
 
@@ -153,11 +157,11 @@ describe("assertTeamScope — TC-SEC-02 팀 범위 밖 조회 차단", () => {
   });
 
   it("범위 밖 사원이 섞이면 403으로 막는다", () => {
-    expectAuthError(() => assertTeamScope(MANAGER, [1n, 99n], subordinates), 403);
+    expectHttpError(() => assertTeamScope(MANAGER, [1n, 99n], subordinates), 403);
   });
 
   it("상급자가 아니면 403으로 막는다", () => {
-    expectAuthError(() => assertTeamScope(SALES_REP, [1n], subordinates), 403);
+    expectHttpError(() => assertTeamScope(SALES_REP, [1n], subordinates), 403);
   });
 
   it("팀원이 없는 상급자는 빈 목록을 받는다", () => {
@@ -188,23 +192,23 @@ describe("assertCanComment — FR-09 / TC-SEC-04 댓글 작성 권한", () => {
   });
 
   it("보고 작성자 본인의 루트 댓글은 403으로 막는다", () => {
-    expectAuthError(() => assertCanComment(SALES_REP, SUBMITTED, ROOT), 403);
+    expectHttpError(() => assertCanComment(SALES_REP, SUBMITTED, ROOT), 403);
   });
 
   it("무관한 사원은 403으로 막는다", () => {
-    expectAuthError(() => assertCanComment(SALES_REP, OTHER_TEAM, ROOT), 403);
+    expectHttpError(() => assertCanComment(SALES_REP, OTHER_TEAM, ROOT), 403);
   });
 
   it("다른 팀 상급자는 403으로 막는다", () => {
-    expectAuthError(() => assertCanComment(MANAGER, OTHER_TEAM, ROOT), 403);
+    expectHttpError(() => assertCanComment(MANAGER, OTHER_TEAM, ROOT), 403);
   });
 
   it("관리자는 댓글 권한이 없다", () => {
-    expectAuthError(() => assertCanComment(ADMIN, SUBMITTED, ROOT), 403);
+    expectHttpError(() => assertCanComment(ADMIN, SUBMITTED, ROOT), 403);
   });
 
-  it("제출되지 않은 보고에는 댓글을 쓸 수 없다", () => {
-    expectAuthError(() => assertCanComment(MANAGER, DRAFT, ROOT), 409);
+  it("제출되지 않은 보고에는 ConflictError(409)로 막는다", () => {
+    expectHttpError(() => assertCanComment(MANAGER, DRAFT, ROOT), 409, ConflictError);
   });
 
   it("작성중 보고를 막을 때 REPORT_NOT_SUBMITTED 코드를 돌려준다", () => {
@@ -212,14 +216,14 @@ describe("assertCanComment — FR-09 / TC-SEC-04 댓글 작성 권한", () => {
       assertCanComment(MANAGER, DRAFT, ROOT);
       expect.unreachable("오류가 발생해야 한다");
     } catch (error) {
-      expect((error as AuthorizationError).code).toBe("REPORT_NOT_SUBMITTED");
+      expect((error as HttpError).code).toBe("REPORT_NOT_SUBMITTED");
     }
   });
 
   it("권한이 없으면 작성중 여부를 알려주지 않고 403으로 막는다", () => {
     const othersDraft = { author: OTHER_TEAM_MEMBER, status: "DRAFT" } as const;
 
-    expectAuthError(() => assertCanComment(SALES_REP, othersDraft, ROOT), 403);
+    expectHttpError(() => assertCanComment(SALES_REP, othersDraft, ROOT), 403);
   });
 });
 
@@ -229,11 +233,11 @@ describe("assertCommentAuthor — TC-CMT-04 타인 댓글 수정 차단", () => 
   });
 
   it("타인이 쓴 댓글은 403으로 막는다", () => {
-    expectAuthError(() => assertCommentAuthor(SALES_REP, MANAGER.repId), 403);
+    expectHttpError(() => assertCommentAuthor(SALES_REP, MANAGER.repId), 403);
   });
 
   it("상급자여도 팀원 댓글은 수정할 수 없다", () => {
-    expectAuthError(() => assertCommentAuthor(MANAGER, SALES_REP.repId), 403);
+    expectHttpError(() => assertCommentAuthor(MANAGER, SALES_REP.repId), 403);
   });
 });
 
@@ -246,8 +250,8 @@ describe("assertReportEditable — TC-SUB-03 제출본 편집 차단", () => {
     expect(() => assertReportEditable(SALES_REP, OWN_DRAFT)).not.toThrow();
   });
 
-  it("제출된 보고는 409로 막는다", () => {
-    expectAuthError(() => assertReportEditable(SALES_REP, OWN_SUBMITTED), 409);
+  it("제출된 보고는 ConflictError(409)로 막는다", () => {
+    expectHttpError(() => assertReportEditable(SALES_REP, OWN_SUBMITTED), 409, ConflictError);
   });
 
   it("제출된 보고를 막을 때 REPORT_LOCKED 코드를 돌려준다", () => {
@@ -255,15 +259,15 @@ describe("assertReportEditable — TC-SUB-03 제출본 편집 차단", () => {
       assertReportEditable(SALES_REP, OWN_SUBMITTED);
       expect.unreachable("오류가 발생해야 한다");
     } catch (error) {
-      expect((error as AuthorizationError).code).toBe("REPORT_LOCKED");
+      expect((error as HttpError).code).toBe("REPORT_LOCKED");
     }
   });
 
   it("타인 보고는 상태와 무관하게 403으로 막는다", () => {
-    expectAuthError(() => assertReportEditable(SALES_REP, OTHERS_DRAFT), 403);
+    expectHttpError(() => assertReportEditable(SALES_REP, OTHERS_DRAFT), 403);
   });
 
   it("상급자도 팀원 보고를 수정할 수는 없다", () => {
-    expectAuthError(() => assertReportEditable(MANAGER, OWN_DRAFT), 403);
+    expectHttpError(() => assertReportEditable(MANAGER, OWN_DRAFT), 403);
   });
 });
