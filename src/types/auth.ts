@@ -1,6 +1,6 @@
-import type { Role } from "@prisma/client";
+import type { ReportStatus, Role } from "@prisma/client";
 
-export type { Role };
+export type { ReportStatus, Role };
 
 export interface AuthTokenPayload {
   repId: string;

@@ -1,4 +1,20 @@
-import type { Role } from "@/types/auth";
+/**
+ * 서버측 인가(권한) 검증 헬퍼. (NFR-01)
+ *
+ * 화면 비표시는 접근통제가 아니므로 모든 권한은 이 헬퍼로 서버에서 검증한다.
+ * 역할별 정책은 다음과 같다.
+ *
+ * | 역할      | 권한                                                  |
+ * |-----------|-------------------------------------------------------|
+ * | SALES_REP | 본인 보고 작성·조회, 본인 댓글 수정·삭제, 고객 마스터 조회·등록 |
+ * | MANAGER   | 직속 팀원 보고 조회·댓글, 고객 마스터 조회·등록            |
+ * | ADMIN     | 영업 마스터 관리                                        |
+ *
+ * DB 접근을 하지 않는 순수 함수로 둔다. 상급자 판정이나 보고 상태 판정에 필요한
+ * 정보는 호출 측에서 조회해 넘긴다.
+ */
+
+import type { ReportStatus, Role } from "@/types/auth";
 
 /**
  * 인가 실패를 나타내는 오류.
@@ -156,4 +172,50 @@ export function assertTeamScope(
   }
 
   return [...requestedRepIds];
+}
+
+/**
+ * 보고 작성자 본인 또는 직속 상급자만 댓글을 작성할 수 있다. (TC-SEC-04)
+ *
+ * 대댓글도 같은 규칙을 쓴다. 상급자 지적에 작성자가 답글을 다는 흐름(SCR-220)이
+ * 본인 허용으로 성립한다. ADMIN은 영업 마스터 관리 역할이라 댓글 권한이 없다.
+ */
+export function assertCanComment(auth: AuthContext, reportAuthor: TargetRep): void {
+  if (isOwner(auth, reportAuthor.repId) || isManagerOf(auth, reportAuthor)) {
+    return;
+  }
+  throw forbidden("이 보고에 댓글을 작성할 권한이 없습니다.");
+}
+
+/**
+ * 본인이 작성한 댓글만 수정·삭제할 수 있다. (TC-CMT-04)
+ *
+ * 상급자여도 타인 댓글은 손대지 못한다.
+ */
+export function assertCommentAuthor(auth: AuthContext, commenterId: bigint): void {
+  if (!isOwner(auth, commenterId)) {
+    throw forbidden("본인이 작성한 댓글만 수정·삭제할 수 있습니다.");
+  }
+}
+
+/** 수정 가능 여부 판정에 필요한 보고의 최소 정보. */
+export interface EditableReport {
+  /** 보고 작성자 rep_id */
+  repId: bigint;
+  status: ReportStatus;
+}
+
+/**
+ * 작성자 본인의 DRAFT 보고만 수정할 수 있다. (TC-SUB-03)
+ *
+ * 타인 보고는 403, 제출된 보고는 409로 구분해 막는다. 둘 다 AuthorizationError로
+ * 던져 라우트에서 한 번에 받는다. 409는 인가 실패가 아니라 상태 충돌이지만,
+ * 수정 가능 여부를 한 곳에서 판정하기 위해 같은 오류 형태로 둔다.
+ */
+export function assertReportEditable(auth: AuthContext, report: EditableReport): void {
+  assertOwner(auth, report.repId);
+
+  if (report.status !== "DRAFT") {
+    throw new AuthorizationError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.", 409);
+  }
 }

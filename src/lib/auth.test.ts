@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   AuthorizationError,
   assertAnyRole,
+  assertCanComment,
+  assertCommentAuthor,
   assertManagerOf,
   assertOwner,
   assertOwnerOrManager,
+  assertReportEditable,
   assertRole,
   assertTeamScope,
   isManagerOf,
@@ -159,5 +162,72 @@ describe("assertTeamScope — TC-SEC-02 팀 범위 밖 조회 차단", () => {
 
   it("팀원이 없는 상급자는 빈 목록을 받는다", () => {
     expect(assertTeamScope(MANAGER, [], [])).toEqual([]);
+  });
+});
+
+describe("assertCanComment — TC-SEC-04 권한 없는 댓글 작성 차단", () => {
+  it("직속 상급자는 댓글을 쓸 수 있다", () => {
+    expect(() => assertCanComment(MANAGER, TEAM_MEMBER)).not.toThrow();
+  });
+
+  it("보고 작성자 본인은 대댓글을 쓸 수 있다", () => {
+    expect(() => assertCanComment(SALES_REP, TEAM_MEMBER)).not.toThrow();
+  });
+
+  it("무관한 사원은 403으로 막는다", () => {
+    expectAuthError(() => assertCanComment(SALES_REP, OTHER_TEAM_MEMBER), 403);
+  });
+
+  it("다른 팀 상급자는 403으로 막는다", () => {
+    expectAuthError(() => assertCanComment(MANAGER, OTHER_TEAM_MEMBER), 403);
+  });
+
+  it("관리자는 댓글 권한이 없다", () => {
+    expectAuthError(() => assertCanComment(ADMIN, TEAM_MEMBER), 403);
+  });
+});
+
+describe("assertCommentAuthor — TC-CMT-04 타인 댓글 수정 차단", () => {
+  it("본인이 쓴 댓글은 통과한다", () => {
+    expect(() => assertCommentAuthor(MANAGER, MANAGER.repId)).not.toThrow();
+  });
+
+  it("타인이 쓴 댓글은 403으로 막는다", () => {
+    expectAuthError(() => assertCommentAuthor(SALES_REP, MANAGER.repId), 403);
+  });
+
+  it("상급자여도 팀원 댓글은 수정할 수 없다", () => {
+    expectAuthError(() => assertCommentAuthor(MANAGER, SALES_REP.repId), 403);
+  });
+});
+
+describe("assertReportEditable — TC-SUB-03 제출본 편집 차단", () => {
+  const OWN_DRAFT = { repId: SALES_REP.repId, status: "DRAFT" } as const;
+  const OWN_SUBMITTED = { repId: SALES_REP.repId, status: "SUBMITTED" } as const;
+  const OTHERS_DRAFT = { repId: 7n, status: "DRAFT" } as const;
+
+  it("본인의 작성중 보고는 수정할 수 있다", () => {
+    expect(() => assertReportEditable(SALES_REP, OWN_DRAFT)).not.toThrow();
+  });
+
+  it("제출된 보고는 409로 막는다", () => {
+    expectAuthError(() => assertReportEditable(SALES_REP, OWN_SUBMITTED), 409);
+  });
+
+  it("제출된 보고를 막을 때 REPORT_LOCKED 코드를 돌려준다", () => {
+    try {
+      assertReportEditable(SALES_REP, OWN_SUBMITTED);
+      expect.unreachable("오류가 발생해야 한다");
+    } catch (error) {
+      expect((error as AuthorizationError).code).toBe("REPORT_LOCKED");
+    }
+  });
+
+  it("타인 보고는 상태와 무관하게 403으로 막는다", () => {
+    expectAuthError(() => assertReportEditable(SALES_REP, OTHERS_DRAFT), 403);
+  });
+
+  it("상급자도 팀원 보고를 수정할 수는 없다", () => {
+    expectAuthError(() => assertReportEditable(MANAGER, OWN_DRAFT), 403);
   });
 });
