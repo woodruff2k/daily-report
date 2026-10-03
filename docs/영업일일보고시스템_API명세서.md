@@ -61,6 +61,7 @@
 ### 1.5 권한 정책
 
 - 모든 권한은 **서버 측에서 검증**한다. 영업사원은 본인 보고만, 상급자는 소속 팀원 보고 조회·댓글, 관리자는 영업 마스터 관리.
+- **역할 간 상하 관계는 두지 않는다.** 관리자(ADMIN)가 영업사원의 보고를 조회할 수 없고, 상급자(MANAGER)가 영업 마스터를 관리할 수 없다. 각 역할은 요구사항 5.1의 담당 범위만 가진다.
 
 ---
 
@@ -346,9 +347,13 @@
 ```json
 {
   "empNo": "S2026001", "name": "홍길동", "email": "hong@company.com",
-  "department": "영업1팀", "position": "대리", "managerId": 2, "status": "ACTIVE"
+  "department": "영업1팀", "position": "대리", "managerId": 2,
+  "role": "SALES_REP", "status": "ACTIVE"
 }
 ```
+
+- `role`은 `SALES_REP` / `MANAGER` / `ADMIN` 중 하나이며 생략하면 `SALES_REP`다. 이 API 자체가 관리자 전용이므로 역할 지정도 관리자만 할 수 있다.
+- `managerId`로 지정하는 사원은 **role이 `MANAGER`여야 한다.** 어긋나면 400(`MANAGER_ROLE_REQUIRED`). 데이터상 상급자인데 팀 보고 조회·댓글 권한이 없는 상태를 막기 위한 제약이다.
 
 - `empNo`, `email`은 유일값(중복 시 409).
 
@@ -358,6 +363,8 @@
 
 - `GET /api/sales-reps/{repId}` → 200  
 - `PUT /api/sales-reps/{repId}` → 200
+
+요청 본문은 6.2와 같다(비밀번호 제외). `role` 변경도 이 경로로 한다.
 
 ### 6.4 영업 비활성화
 

@@ -124,3 +124,7 @@ db-down:
 .PHONY: db-seed
 db-seed:
 	npx prisma db seed
+
+.PHONY: bootstrap-admin
+bootstrap-admin:
+	npm run bootstrap:admin

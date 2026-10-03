@@ -17,6 +17,17 @@ export const REP: SalesRep = {
   updatedAt: new Date("2026-06-20T09:00:00.000Z"),
 };
 
+/** 상급자로 지정 가능한 사원. role 이 MANAGER 여야 한다. */
+export const MANAGER_REP: SalesRep = {
+  ...REP,
+  repId: 2n,
+  empNo: "S2026000",
+  name: "김부장",
+  email: "manager@example.com",
+  managerId: null,
+  role: "MANAGER",
+};
+
 const ADMIN_HEADERS = { "x-user-rep-id": "9", "x-user-role": "ADMIN" };
 const SALES_REP_HEADERS = { "x-user-rep-id": "1", "x-user-role": "SALES_REP" };
 

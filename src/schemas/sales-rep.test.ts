@@ -92,3 +92,25 @@ describe("salesRepStatusSchema", () => {
     expect(salesRepStatusSchema.safeParse({ status: "DELETED" }).success).toBe(false);
   });
 });
+
+describe("salesRepCreateSchema — role (#48)", () => {
+  it("역할을 생략하면 SALES_REP 다", () => {
+    expect(salesRepCreateSchema.safeParse(VALID).data?.role).toBe("SALES_REP");
+  });
+
+  it.each(["SALES_REP", "MANAGER", "ADMIN"])("%s 를 받는다", (role) => {
+    expect(salesRepCreateSchema.safeParse({ ...VALID, role }).success).toBe(true);
+  });
+
+  it.each(["SUPERUSER", "admin", ""])("정의되지 않은 역할(%s)은 거부한다", (role) => {
+    expect(salesRepCreateSchema.safeParse({ ...VALID, role }).success).toBe(false);
+  });
+});
+
+describe("salesRepUpdateSchema — role (#48)", () => {
+  it("수정에서도 역할을 받는다", () => {
+    expect(salesRepUpdateSchema.safeParse({ ...VALID, role: "MANAGER" }).data?.role).toBe(
+      "MANAGER"
+    );
+  });
+});

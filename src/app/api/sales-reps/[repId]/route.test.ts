@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MANAGER_REP,
   REP,
   asAdmin,
   asSalesRep,
@@ -37,12 +38,13 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(REP);
+  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
   vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(REP);
 });
 
 describe("GET /api/sales-reps/{repId}", () => {
   it("관리자는 상세를 조회한다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
     const response = await GET(asAdmin(URL), params("1"));
     const body = await readBody(response);
 
@@ -52,6 +54,7 @@ describe("GET /api/sales-reps/{repId}", () => {
   });
 
   it("응답에 비밀번호 해시가 들어가지 않는다", async () => {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
     const response = await GET(asAdmin(URL), params("1"));
 
     expect(JSON.stringify(await readBody(response))).not.toContain("$2a$");

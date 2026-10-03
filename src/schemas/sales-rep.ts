@@ -10,6 +10,14 @@ import { z } from "zod";
 const repStatusSchema = z.enum(["ACTIVE", "INACTIVE"]);
 
 /**
+ * 역할. 인가 판정의 근거이므로(#4) 등록·수정에서 명시적으로 받는다.
+ *
+ * 이 엔드포인트 자체가 ADMIN 전용이라 역할을 올리는 요청은 관리자만 보낼 수 있다.
+ * 기본값을 SALES_REP 로 둬서 API 명세 6.2 의 요청 예시(역할 없음)도 통과한다.
+ */
+const roleSchema = z.enum(["SALES_REP", "MANAGER", "ADMIN"]);
+
+/**
  * 식별자는 JSON 숫자(API 명세 6.2)로 오지만 DB는 BigInt다.
  * 안전 정수 범위를 넘는 값은 변환 과정에서 정밀도를 잃으므로 미리 막는다.
  */
@@ -26,6 +34,7 @@ export const salesRepCreateSchema = z.object({
   department: z.string().trim().max(100).optional(),
   position: z.string().trim().max(100).optional(),
   managerId: repIdSchema.optional(),
+  role: roleSchema.default("SALES_REP"),
   status: repStatusSchema.default("ACTIVE"),
   /**
    * 선택 항목. 생략하면 로그인할 수 없는 계정으로 만들어진다.
