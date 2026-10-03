@@ -4,7 +4,7 @@ import { assertRole, parseAuthContext } from "@/lib/auth";
 import { ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
-import { toSalesRepResponse } from "@/lib/sales-rep";
+import { assertNotLastActiveAdmin, toSalesRepResponse } from "@/lib/sales-rep";
 import { parseRepIdParam } from "@/lib/sales-rep-query";
 import { salesRepStatusSchema } from "@/schemas/sales-rep";
 
@@ -30,6 +30,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!parsed.success) {
       throw new ValidationError("status는 ACTIVE 또는 INACTIVE 여야 합니다.");
     }
+
+    await assertNotLastActiveAdmin(repId, { status: parsed.data.status });
 
     const updated = await prisma.salesRep.update({
       where: { repId },

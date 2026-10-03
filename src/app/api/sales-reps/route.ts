@@ -6,7 +6,11 @@ import { pageResponse, parsePageRequest } from "@/lib/pagination";
 import { generateTemporaryPassword, hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
-import { assertManagerExists, toSalesRepResponse } from "@/lib/sales-rep";
+import {
+  assertManagerAssignable,
+  toSalesRepListItem,
+  toSalesRepResponse,
+} from "@/lib/sales-rep";
 import {
   SALES_REP_SORT_FIELDS,
   buildSalesRepWhere,
@@ -39,7 +43,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     return apiSuccess(
-      pageResponse(reps.map(toSalesRepResponse), totalElements, pageRequest)
+      pageResponse(reps.map(toSalesRepListItem), totalElements, pageRequest)
     );
   } catch (error) {
     return apiErrorResponse(error);
@@ -67,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { password, managerId, ...fields } = parsed.data;
 
     if (managerId !== undefined) {
-      await assertManagerExists(BigInt(managerId));
+      await assertManagerAssignable(BigInt(managerId));
     }
 
     // 비밀번호를 받지 않았으면 임시 비밀번호를 만들어 응답에 1회 담는다.

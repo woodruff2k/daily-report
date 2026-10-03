@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     salesRep: {
       findUnique: vi.fn(),
+      count: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
@@ -28,6 +29,11 @@ function prismaError(code: string) {
 }
 
 beforeEach(() => {
+  // 기본값은 관리자가 아닌 사원 — 마지막 관리자 판정에 걸리지 않는다.
+  vi.mocked(prisma.salesRep.findUnique)
+    .mockReset()
+    .mockResolvedValue({ role: "SALES_REP", status: "ACTIVE" } as never);
+  vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(0);
   vi.mocked(prisma.salesRep.update)
     .mockReset()
     .mockResolvedValue({ ...REP, status: "INACTIVE" });
@@ -133,5 +139,51 @@ describe("PATCH status — 토큰 무효화 (#52)", () => {
     // 끊을 세션이 없다. 이미 비활성 상태에서는 토큰이 모두 막혀 있다.
     const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
     expect(data.tokenVersion).toBeUndefined();
+  });
+});
+
+describe("PATCH status — 마지막 관리자 보호 (#49)", () => {
+  function targetIsLastAdmin() {
+    vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
+      role: "ADMIN",
+      status: "ACTIVE",
+    } as never);
+    vi.mocked(prisma.salesRep.count).mockResolvedValue(0);
+  }
+
+  it("마지막 활성 관리자는 비활성화할 수 없다", async () => {
+    targetIsLastAdmin();
+
+    const response = await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(409);
+    expect((await readBody(response)).error?.code).toBe("LAST_ACTIVE_ADMIN");
+    expect(prisma.salesRep.update).not.toHaveBeenCalled();
+  });
+
+  it("다른 관리자가 있으면 비활성화할 수 있다", async () => {
+    targetIsLastAdmin();
+    vi.mocked(prisma.salesRep.count).mockResolvedValue(1);
+
+    const response = await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("마지막 관리자를 다시 활성화하는 것은 막지 않는다", async () => {
+    targetIsLastAdmin();
+
+    const response = await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }),
+      params("1")
+    );
+
+    expect(response.status).toBe(200);
   });
 });
