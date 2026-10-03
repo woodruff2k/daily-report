@@ -218,6 +218,17 @@ describe("proxy — 토큰 무효화 (#52)", () => {
     });
   });
 
+  it("repId 가 숫자가 아닌 토큰은 401 이다", async () => {
+    vi.mocked(verifyAccessToken).mockReturnValue({ ...PAYLOAD, repId: "not-a-number" });
+
+    // 서명이 유효해도 payload 형식까지 보장되지는 않는다. BigInt 변환이
+    // 예외를 내면 500 이 된다.
+    const response = await proxy(bearer("/api/reports"));
+
+    expect(response.status).toBe(401);
+    expect(prisma.salesRep.findUnique).not.toHaveBeenCalled();
+  });
+
   it("무효화 응답에 사유를 자세히 적지 않는다", async () => {
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
       ...ACCOUNT,

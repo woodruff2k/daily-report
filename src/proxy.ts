@@ -45,11 +45,21 @@ export async function proxy(request: NextRequest) {
     return unauthorized("유효하지 않은 토큰입니다.");
   }
 
+  // 서명이 유효해도 payload 형식까지 보장되지는 않는다. 숫자가 아닌 repId 를
+  // BigInt 로 넘기면 예외가 나 500 이 된다. parseAuthContext 도 같은 지점을
+  // 방어한다.
+  let repId: bigint;
+  try {
+    repId = BigInt(payload.repId);
+  } catch {
+    return unauthorized("유효하지 않은 토큰입니다.");
+  }
+
   // 서명과 만료만 보면 발급 후 상태 변화를 알 수 없다. 비밀번호 변경·재발급,
   // 비활성화, 역할 변경, 로그아웃은 tokenVersion 을 올리고, 여기서 그 값을
   // 비교해 지난 토큰을 거둬들인다. 요청마다 조회 1회가 드는 대가다. (이슈 #52)
   const rep = await prisma.salesRep.findUnique({
-    where: { repId: BigInt(payload.repId) },
+    where: { repId },
     select: { tokenVersion: true, status: true },
   });
 
