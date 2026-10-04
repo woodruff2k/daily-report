@@ -38,12 +38,23 @@ export interface SalesRepListItem {
   department: string | null;
   position: string | null;
   managerId: number | null;
+  /**
+   * 상급자 이름. 화면(SCR-500)의 목록 컬럼이 이름이고, 식별자만 주면 화면이
+   * 다시 조회해야 한다. 페이지네이션 때문에 같은 목록 안에 상급자가 있다는
+   * 보장도 없다. (이슈 #17)
+   */
+  managerName: string | null;
   role: SalesRep["role"];
   status: SalesRep["status"];
 }
 
+/** 상급자 이름을 함께 읽은 레코드. */
+export type SalesRepWithManager = SalesRep & {
+  manager: { name: string } | null;
+};
+
 /** Prisma 레코드를 목록 항목으로 바꾼다. */
-export function toSalesRepListItem(rep: SalesRep): SalesRepListItem {
+export function toSalesRepListItem(rep: SalesRepWithManager): SalesRepListItem {
   return {
     repId: toJsonId(rep.repId),
     empNo: rep.empNo,
@@ -51,6 +62,7 @@ export function toSalesRepListItem(rep: SalesRep): SalesRepListItem {
     department: rep.department,
     position: rep.position,
     managerId: toJsonIdOrNull(rep.managerId),
+    managerName: rep.manager?.name ?? null,
     role: rep.role,
     status: rep.status,
   };

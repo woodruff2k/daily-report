@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MANAGER_REP,
   REP,
+  REP_WITH_MANAGER,
   asAdmin,
   asSalesRep,
   readBody,
@@ -47,7 +48,7 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.findMany).mockReset().mockResolvedValue([REP]);
+  vi.mocked(prisma.salesRep.findMany).mockReset().mockResolvedValue([REP_WITH_MANAGER]);
   vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
   vi.mocked(prisma.salesRep.create).mockReset().mockResolvedValue(REP);
   vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
@@ -345,5 +346,38 @@ describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
 
     expect(response.status).toBe(400);
     expect(prisma.salesRep.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/sales-reps — 상급자 이름·역할 필터 (#17)", () => {
+  it("목록에 상급자 이름을 담는다", async () => {
+    const body = await readBody(await GET(asAdmin(URL)));
+    const [first] = (body.data as { content: { managerName: string | null }[] }).content;
+
+    expect(first.managerName).toBe("김부장");
+  });
+
+  it("상급자 이름을 함께 조회한다", async () => {
+    await GET(asAdmin(URL));
+
+    expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ include: { manager: { select: { name: true } } } })
+    );
+  });
+
+  it("role 로 걸러 조회한다", async () => {
+    await GET(asAdmin(`${URL}?role=MANAGER`));
+
+    // 상급자 Select 는 MANAGER 만 고를 수 있어야 한다. (SCR-510)
+    expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { role: "MANAGER" } })
+    );
+  });
+
+  it("정의되지 않은 role 은 400 이다", async () => {
+    const response = await GET(asAdmin(`${URL}?role=SUPERUSER`));
+
+    expect(response.status).toBe(400);
+    expect(prisma.salesRep.findMany).not.toHaveBeenCalled();
   });
 });

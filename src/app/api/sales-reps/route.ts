@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
         skip: pageRequest.skip,
         take: pageRequest.take,
         orderBy: pageRequest.orderBy,
+        // 목록 컬럼이 상급자 이름이다. 식별자만 주면 화면이 다시 조회해야 한다.
+        include: { manager: { select: { name: true } } },
       }),
       prisma.salesRep.count({ where }),
     ]);

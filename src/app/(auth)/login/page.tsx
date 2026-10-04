@@ -57,7 +57,14 @@ export default function LoginPage() {
 
       // 임시 비밀번호 상태면 비밀번호 변경으로 보낸다. 서버도 다른 API 를
       // 403 으로 막으므로(#44) 이 분기를 놓쳐도 접근통제는 유지된다.
-      router.replace(data.mustChangePassword ? "/password" : "/reports");
+      if (data.mustChangePassword) {
+        router.replace("/password");
+        return;
+      }
+
+      // 관리자는 SCR-200(본인 보고 목록)의 접근 권한이 없다(화면정의서 1).
+      // 영업 마스터 목록으로 보낸다. (이슈 #17)
+      router.replace(data.rep.role === "ADMIN" ? "/sales-reps" : "/reports");
     } catch {
       setError("이메일/사번 또는 비밀번호가 올바르지 않습니다.");
     } finally {

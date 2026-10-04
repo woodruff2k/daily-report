@@ -383,8 +383,12 @@
 | keyword | string | N | 이름/사번 |
 | department | string | N | 부서 |
 | status | enum | N | ACTIVE / INACTIVE |
+| role | enum | N | SALES_REP / MANAGER / ADMIN |
 
-응답의 목록 항목은 화면(SCR-500)이 쓰는 것만 담는다 — `repId`, `empNo`, `name`, `department`, `position`, `managerId`, `role`, `status`. **이메일은 포함하지 않는다**(NFR-04). 이메일이 필요하면 상세(6.3)를 쓴다.
+응답의 목록 항목은 화면(SCR-500)이 쓰는 것만 담는다 — `repId`, `empNo`, `name`, `department`, `position`, `managerId`, `managerName`, `role`, `status`. **이메일은 포함하지 않는다**(NFR-04). 이메일이 필요하면 상세(6.3)를 쓴다.
+
+- `managerName`은 상급자 이름이다. 목록 컬럼이 이름이라 식별자만 주면 화면이 다시 조회해야 하고, 페이지네이션 때문에 같은 목록 안에 상급자가 있다는 보장도 없다.
+- `role` 필터는 SCR-510의 상급자 Select가 쓴다. 전부 받아 화면에서 거르면 페이지네이션에 걸려 빠지는 사원이 생긴다.
 
 ### 6.2 영업 등록
 

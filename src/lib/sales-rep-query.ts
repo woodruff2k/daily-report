@@ -32,6 +32,16 @@ export function buildSalesRepWhere(params: URLSearchParams): Prisma.SalesRepWher
     where.department = department;
   }
 
+  // 상급자 Select 는 MANAGER 만 골라야 한다(SCR-510). 전부 받아 화면에서
+  // 거르면 페이지네이션에 걸려 빠지는 사원이 생긴다. (이슈 #17)
+  const role = params.get("role")?.trim();
+  if (role) {
+    if (role !== "SALES_REP" && role !== "MANAGER" && role !== "ADMIN") {
+      throw new ValidationError("role은 SALES_REP, MANAGER, ADMIN 중 하나여야 합니다.");
+    }
+    where.role = role;
+  }
+
   const status = params.get("status")?.trim();
   if (status) {
     if (status !== "ACTIVE" && status !== "INACTIVE") {
