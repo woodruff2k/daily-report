@@ -26,7 +26,14 @@ next-env.d.ts
 # coverage
 coverage/
 
-# claude code — 개인 설정과 백업. commands/ 와 hooks/ 는 공유 대상이므로 제외하지 않는다.
+# claude code
+#
+# commands/ 만 공유한다. 슬래시 명령은 파일만 있으면 동작한다.
+#
+# 훅은 공유하지 않는다. 저장소에 훅을 두면 클론한 사람의 머신에서 명령이
+# 실행되므로, 넣을지는 저장소 주인이 명시적으로 정할 일이다. 지금은 각자
+# settings.local.json 에 등록해 쓴다.
 .claude/settings.local.json
+.claude/hooks/
 *.bak
 *.bak[0-9]
