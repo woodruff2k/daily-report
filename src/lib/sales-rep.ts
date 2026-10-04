@@ -1,7 +1,7 @@
 import type { SalesRep } from "@prisma/client";
 import { ConflictError, ValidationError } from "./errors";
 import { toJsonId, toJsonIdOrNull } from "./identifier";
-import { prisma } from "./prisma";
+import { prisma, type DbClient } from "./prisma";
 
 /**
  * 응답에 담는 영업 마스터 필드. (API 명세 6)
@@ -178,12 +178,17 @@ async function assertNoManagerCycle(
  *
  * 자기 계정 조작 자체는 막지 않는다. 관리자가 여럿일 때 교체·정리는 정상
  * 작업이다. 마지막 한 명이 사라지는 경우만 409 로 막는다.
+ *
+ * **쓰기와 같은 트랜잭션에서 호출해야 한다.** 판정과 쓰기가 나뉘면 동시 요청이
+ * 둘 다 통과해 관리자가 0명이 될 수 있다. `lockAdminMutations` 로 그 트랜잭션을
+ * 직렬화한다. (이슈 #55)
  */
 export async function assertNotLastActiveAdmin(
+  tx: DbClient,
   repId: bigint,
   next: { role?: SalesRep["role"]; status?: SalesRep["status"] }
 ): Promise<void> {
-  const current = await prisma.salesRep.findUnique({
+  const current = await tx.salesRep.findUnique({
     where: { repId },
     select: { role: true, status: true },
   });
@@ -200,7 +205,7 @@ export async function assertNotLastActiveAdmin(
     return;
   }
 
-  const others = await prisma.salesRep.count({
+  const others = await tx.salesRep.count({
     where: { role: "ADMIN", status: "ACTIVE", repId: { not: repId } },
   });
 

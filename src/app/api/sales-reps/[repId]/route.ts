@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { apiErrorResponse, apiSuccess } from "@/lib/api-response";
+import { lockAdminMutations } from "@/lib/advisory-lock";
 import { assertRole, parseAuthContext } from "@/lib/auth";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
@@ -66,8 +67,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       throw new NotFoundError("영업사원을 찾을 수 없습니다.");
     }
 
-    await assertNotLastActiveAdmin(repId, { role: fields.role, status: fields.status });
-
     // 상급자가 바뀔 때만 검증한다. 매번 검증하면 상급자가 나중에 비활성화된
     // 사원은 이름·부서만 고치려는 요청까지 막힌다. (이슈 #49)
     const nextManagerId = managerId === undefined ? null : BigInt(managerId);
@@ -76,17 +75,39 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       await assertManagerAssignable(nextManagerId, repId);
     }
 
-    const revokeTokens =
-      current.role !== fields.role ||
-      (current.status !== fields.status && fields.status === "INACTIVE");
+    // 마지막 관리자 판정과 쓰기를 한 트랜잭션에 묶고 잠금으로 직렬화한다.
+    // 상급자 검증(체인 추적)은 잠금 밖에 둔다 — 조회가 여러 번이라 잠금을
+    // 오래 잡고, 그쪽 경합은 관리자 잠금과 다른 문제다. (이슈 #55)
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockAdminMutations(tx);
+      await assertNotLastActiveAdmin(tx, repId, {
+        role: fields.role,
+        status: fields.status,
+      });
 
-    const updated = await prisma.salesRep.update({
-      where: { repId },
-      data: {
-        ...fields,
-        managerId: nextManagerId,
-        tokenVersion: revokeTokens ? { increment: 1 } : undefined,
-      },
+      // 역할·상태를 트랜잭션 안에서 다시 읽는다. 바깥에서 읽은 값으로
+      // 토큰 무효화를 판단하면 그 사이의 변경을 놓친다. (이슈 #52)
+      const locked = await tx.salesRep.findUnique({
+        where: { repId },
+        select: { role: true, status: true },
+      });
+
+      if (!locked) {
+        throw new NotFoundError("영업사원을 찾을 수 없습니다.");
+      }
+
+      const revokeTokens =
+        locked.role !== fields.role ||
+        (locked.status !== fields.status && fields.status === "INACTIVE");
+
+      return tx.salesRep.update({
+        where: { repId },
+        data: {
+          ...fields,
+          managerId: nextManagerId,
+          tokenVersion: revokeTokens ? { increment: 1 } : undefined,
+        },
+      });
     });
 
     return apiSuccess(toSalesRepResponse(updated));

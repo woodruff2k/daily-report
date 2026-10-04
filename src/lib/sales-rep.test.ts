@@ -168,6 +168,7 @@ describe("assertManagerAssignable — 상태·순환 (#49)", () => {
 });
 
 describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
+  // 트랜잭션 클라이언트를 받는다. 테스트에서는 모킹한 prisma 를 그대로 넘긴다.
   const ADMIN_REP = { role: "ADMIN" as const, status: "ACTIVE" as const };
 
   beforeEach(() => {
@@ -177,13 +178,13 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
 
   it("마지막 관리자를 강등하면 409로 막는다", async () => {
     // #52 이후로는 토큰까지 끊겨 되돌릴 방법이 DB 수정뿐이다.
-    await expect(assertNotLastActiveAdmin(1n, { role: "SALES_REP" })).rejects.toThrow(
+    await expect(assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" })).rejects.toThrow(
       ConflictError
     );
   });
 
   it("마지막 관리자를 비활성화하면 409로 막는다", async () => {
-    await expect(assertNotLastActiveAdmin(1n, { status: "INACTIVE" })).rejects.toThrow(
+    await expect(assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" })).rejects.toThrow(
       ConflictError
     );
   });
@@ -193,7 +194,7 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
 
     // 관리자가 여럿일 때 교체·정리는 정상 작업이다.
     await expect(
-      assertNotLastActiveAdmin(1n, { role: "SALES_REP" })
+      assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" })
     ).resolves.toBeUndefined();
   });
 
@@ -204,14 +205,14 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
     } as never);
 
     await expect(
-      assertNotLastActiveAdmin(1n, { status: "INACTIVE" })
+      assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" })
     ).resolves.toBeUndefined();
     expect(prisma.salesRep.count).not.toHaveBeenCalled();
   });
 
   it("관리자 역할·상태를 유지하는 수정은 막지 않는다", async () => {
     await expect(
-      assertNotLastActiveAdmin(1n, { role: "ADMIN", status: "ACTIVE" })
+      assertNotLastActiveAdmin(prisma, 1n, { role: "ADMIN", status: "ACTIVE" })
     ).resolves.toBeUndefined();
     expect(prisma.salesRep.count).not.toHaveBeenCalled();
   });
@@ -219,7 +220,7 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
   it("다른 활성 관리자 수를 자기 자신을 빼고 센다", async () => {
     vi.mocked(prisma.salesRep.count).mockResolvedValue(1);
 
-    await assertNotLastActiveAdmin(1n, { status: "INACTIVE" });
+    await assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" });
 
     expect(prisma.salesRep.count).toHaveBeenCalledWith({
       where: { role: "ADMIN", status: "ACTIVE", repId: { not: 1n } },
