@@ -25,3 +25,8 @@ next-env.d.ts
 
 # coverage
 coverage/
+
+# claude code — 개인 설정과 백업. commands/ 와 hooks/ 는 공유 대상이므로 제외하지 않는다.
+.claude/settings.local.json
+*.bak
+*.bak[0-9]
