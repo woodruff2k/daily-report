@@ -3,8 +3,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const replace = vi.fn();
+const push = vi.fn();
+// 같은 객체를 돌려준다. 매 렌더 새 객체를 주면 [router] 의존 효과가 계속 다시
+// 돌아, 화면이 하지 않은 이동까지 호출된 것처럼 보인다.
+const router = { replace, push };
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace, push: vi.fn() }),
+  useRouter: () => router,
 }));
 
 import LoginPage from "./page";
@@ -60,15 +64,35 @@ describe("SCR-100 로그인 — #11", () => {
     expect(screen.getByLabelText("비밀번호")).toHaveAttribute("type", "password");
   });
 
-  it("성공하면 세션을 저장하고 목록으로 보낸다 (TC-AUTH-01)", async () => {
+  it("관리자는 영업 마스터 목록으로 보낸다 (TC-AUTH-01)", async () => {
     loginSucceeds();
     render(<LoginPage />);
 
     await fillAndSubmit("test-admin@example.com", "seed-dev-only-Passw0rd!");
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/reports"));
+    // 관리자는 SCR-200(본인 보고 목록)의 접근 권한이 없다. (#17)
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sales-reps"));
     expect(getAccessToken()).toBe("issued.token");
     expect(getStoredRep()).toEqual(REP);
+  });
+
+  it("영업사원은 일일보고 목록으로 보낸다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(200, {
+        success: true,
+        data: {
+          accessToken: "issued.token",
+          rep: { repId: 2, name: "홍길동", role: "SALES_REP" },
+          mustChangePassword: false,
+        },
+        error: null,
+      })
+    );
+    render(<LoginPage />);
+
+    await fillAndSubmit("hong@example.com", "seed-dev-only-Passw0rd!");
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/reports"));
   });
 
   it("임시 비밀번호 상태면 비밀번호 변경으로 보낸다 (#44)", async () => {

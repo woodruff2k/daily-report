@@ -19,6 +19,9 @@ export const REP: SalesRep = {
   updatedAt: new Date("2026-06-20T09:00:00.000Z"),
 };
 
+/** 상급자 이름을 함께 읽은 목록용 레코드. (#17) */
+export const REP_WITH_MANAGER = { ...REP, manager: { name: "김부장" } };
+
 /** 상급자로 지정 가능한 사원. role 이 MANAGER 여야 한다. */
 export const MANAGER_REP: SalesRep = {
   ...REP,

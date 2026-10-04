@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MANAGER_REP, REP } from "@/test/sales-rep-fixtures";
+import { MANAGER_REP, REP, REP_WITH_MANAGER } from "@/test/sales-rep-fixtures";
 
 vi.mock("./prisma", () => ({
   prisma: { salesRep: { findUnique: vi.fn(), count: vi.fn() } },
@@ -88,14 +88,15 @@ describe("assertManagerAssignable", () => {
 describe("toSalesRepListItem — NFR-04 목록 최소화 (#49)", () => {
   it("이메일을 내보내지 않는다", () => {
     // SCR-500 의 목록 항목은 사번·이름·부서·직급·상급자·상태다.
-    expect(toSalesRepListItem(REP)).not.toHaveProperty("email");
+    expect(toSalesRepListItem(REP_WITH_MANAGER)).not.toHaveProperty("email");
   });
 
   it("화면이 쓰는 항목만 담는다", () => {
-    expect(Object.keys(toSalesRepListItem(REP)).sort()).toEqual([
+    expect(Object.keys(toSalesRepListItem(REP_WITH_MANAGER)).sort()).toEqual([
       "department",
       "empNo",
       "managerId",
+      "managerName",
       "name",
       "position",
       "repId",
@@ -110,7 +111,7 @@ describe("toSalesRepListItem — NFR-04 목록 최소화 (#49)", () => {
   });
 
   it("BigInt 식별자를 숫자로 바꾼다", () => {
-    const item = toSalesRepListItem(REP);
+    const item = toSalesRepListItem(REP_WITH_MANAGER);
 
     expect(item.repId).toBe(1);
     expect(() => JSON.stringify(item)).not.toThrow();
@@ -225,5 +226,23 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
     expect(prisma.salesRep.count).toHaveBeenCalledWith({
       where: { role: "ADMIN", status: "ACTIVE", repId: { not: 1n } },
     });
+  });
+});
+
+describe("toSalesRepListItem — 상급자 이름 (#17)", () => {
+  it("상급자 이름을 담는다", () => {
+    // SCR-500 의 목록 컬럼이 이름이다.
+    expect(toSalesRepListItem(REP_WITH_MANAGER).managerName).toBe("김부장");
+  });
+
+  it("상급자가 없으면 null 이다", () => {
+    const item = toSalesRepListItem({ ...REP, managerId: null, manager: null });
+
+    expect(item.managerName).toBeNull();
+    expect(item.managerId).toBeNull();
+  });
+
+  it("이메일은 여전히 담지 않는다 (NFR-04)", () => {
+    expect(toSalesRepListItem(REP_WITH_MANAGER)).not.toHaveProperty("email");
   });
 });
