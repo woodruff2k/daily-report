@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/password-policy";
 
 export const loginRequestSchema = z.object({
   loginId: z.string().min(1),

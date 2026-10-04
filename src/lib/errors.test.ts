@@ -27,9 +27,9 @@ describe("AuthorizationError", () => {
   });
 
   it("name이 클래스 이름으로 설정된다", () => {
-    expect(new AuthorizationError("FORBIDDEN", "권한이 없습니다.", 403).name).toBe(
-      "AuthorizationError"
-    );
+    expect(
+      new AuthorizationError("FORBIDDEN", "권한이 없습니다.", 403).name,
+    ).toBe("AuthorizationError");
   });
 
   it("상태 충돌과 구분된다", () => {
@@ -41,17 +41,25 @@ describe("AuthorizationError", () => {
 
 describe("ConflictError", () => {
   it("상태는 항상 409다", () => {
-    expect(new ConflictError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.").status).toBe(409);
+    expect(
+      new ConflictError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.")
+        .status,
+    ).toBe(409);
   });
 
   it("HttpError로도 잡히지만 인가 실패와는 구분된다", () => {
-    const error = new ConflictError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.");
+    const error = new ConflictError(
+      "REPORT_LOCKED",
+      "제출된 보고는 수정할 수 없습니다.",
+    );
 
     expect(error).toBeInstanceOf(HttpError);
     expect(error).not.toBeInstanceOf(AuthorizationError);
   });
 
   it("name이 클래스 이름으로 설정된다", () => {
-    expect(new ConflictError("REPORT_LOCKED", "잠김").name).toBe("ConflictError");
+    expect(new ConflictError("REPORT_LOCKED", "잠김").name).toBe(
+      "ConflictError",
+    );
   });
 });

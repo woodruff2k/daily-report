@@ -26,7 +26,11 @@ export interface PageResponse<T> {
 const DEFAULT_SIZE = 20;
 const MAX_SIZE = 100;
 
-function parseNonNegativeInt(raw: string | null, fallback: number, field: string): number {
+function parseNonNegativeInt(
+  raw: string | null,
+  fallback: number,
+  field: string,
+): number {
   if (raw === null || raw === "") {
     return fallback;
   }
@@ -52,7 +56,7 @@ function parseNonNegativeInt(raw: string | null, fallback: number, field: string
 export function parsePageRequest(
   params: URLSearchParams,
   allowedSortFields: readonly string[],
-  defaultSort: Record<string, SortDirection>
+  defaultSort: Record<string, SortDirection>,
 ): PageRequest {
   const page = parseNonNegativeInt(params.get("page"), 0, "page");
   const size = parseNonNegativeInt(params.get("size"), DEFAULT_SIZE, "size");
@@ -73,17 +77,19 @@ export function parsePageRequest(
 function parseSort(
   raw: string | null,
   allowedSortFields: readonly string[],
-  defaultSort: Record<string, SortDirection>
+  defaultSort: Record<string, SortDirection>,
 ): Record<string, SortDirection> {
   if (!raw) {
     return defaultSort;
   }
 
-  const [field, direction = "asc"] = raw.split(",", 2).map((part) => part.trim());
+  const [field, direction = "asc"] = raw
+    .split(",", 2)
+    .map((part) => part.trim());
 
   if (!allowedSortFields.includes(field)) {
     throw new ValidationError(
-      `sort 가능한 필드는 ${allowedSortFields.join(", ")} 입니다.`
+      `sort 가능한 필드는 ${allowedSortFields.join(", ")} 입니다.`,
     );
   }
 
@@ -98,7 +104,7 @@ function parseSort(
 export function pageResponse<T>(
   content: T[],
   totalElements: number,
-  request: PageRequest
+  request: PageRequest,
 ): PageResponse<T> {
   return {
     content,

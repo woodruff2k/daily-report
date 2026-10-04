@@ -35,8 +35,11 @@ beforeEach(() => {
   // 트랜잭션 콜백에 모킹한 클라이언트를 그대로 넘긴다.
   vi.mocked(prisma.$transaction)
     .mockReset()
-    .mockImplementation(((fn: (tx: unknown) => unknown) => fn(prisma)) as never);
-  vi.mocked(prisma.$executeRaw).mockReset().mockResolvedValue(1 as never);
+    .mockImplementation(((fn: (tx: unknown) => unknown) =>
+      fn(prisma)) as never);
+  vi.mocked(prisma.$executeRaw)
+    .mockReset()
+    .mockResolvedValue(1 as never);
   // 기본값은 관리자가 아닌 사원 — 마지막 관리자 판정에 걸리지 않는다.
   vi.mocked(prisma.salesRep.findUnique)
     .mockReset()
@@ -51,7 +54,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
   it("상태를 INACTIVE 로 바꾼다", async () => {
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
     const body = await readBody(response);
 
@@ -66,7 +69,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
   it("물리 삭제를 호출하지 않는다 (NFR-03)", async () => {
     await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(prisma.salesRep.delete).not.toHaveBeenCalled();
@@ -78,7 +81,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
 
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(200);
@@ -88,11 +91,14 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
   it.each([{ status: "DELETED" }, { status: "" }, {}])(
     "정의되지 않은 상태(%o)는 400이다",
     async (body) => {
-      const response = await PATCH(asAdmin(URL, { method: "PATCH", body }), params("1"));
+      const response = await PATCH(
+        asAdmin(URL, { method: "PATCH", body }),
+        params("1"),
+      );
 
       expect(response.status).toBe(400);
       expect(prisma.salesRep.update).not.toHaveBeenCalled();
-    }
+    },
   );
 
   it("없는 사원이면 404다", async () => {
@@ -100,7 +106,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
 
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("99")
+      params("99"),
     );
 
     expect(response.status).toBe(404);
@@ -109,7 +115,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
   it("repId 가 숫자가 아니면 400이다", async () => {
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("abc")
+      params("abc"),
     );
 
     expect(response.status).toBe(400);
@@ -119,7 +125,7 @@ describe("PATCH /api/sales-reps/{repId}/status — TC-REP-04", () => {
   it("영업사원이 호출하면 403이다 (TC-SEC-03)", async () => {
     const response = await PATCH(
       asSalesRep(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(403);
@@ -131,7 +137,7 @@ describe("PATCH status — 토큰 무효화 (#52)", () => {
   it("비활성화하면 토큰 버전을 올린다", async () => {
     await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     // 비활성화는 즉시 효력이 있어야 한다. 토큰 만료를 기다리지 않는다.
@@ -142,7 +148,10 @@ describe("PATCH status — 토큰 무효화 (#52)", () => {
   it("재활성화할 때는 버전을 올리지 않는다", async () => {
     vi.mocked(prisma.salesRep.update).mockResolvedValue(REP);
 
-    await PATCH(asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }), params("1"));
+    await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }),
+      params("1"),
+    );
 
     // 끊을 세션이 없다. 이미 비활성 상태에서는 토큰이 모두 막혀 있다.
     const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
@@ -164,7 +173,7 @@ describe("PATCH status — 마지막 관리자 보호 (#49)", () => {
 
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(409);
@@ -178,7 +187,7 @@ describe("PATCH status — 마지막 관리자 보호 (#49)", () => {
 
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(200);
@@ -189,7 +198,7 @@ describe("PATCH status — 마지막 관리자 보호 (#49)", () => {
 
     const response = await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "ACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(200);
@@ -200,7 +209,7 @@ describe("PATCH status — 판정과 쓰기를 한 트랜잭션에 묶는다 (#5
   it("트랜잭션 안에서 처리한다", async () => {
     await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -209,18 +218,22 @@ describe("PATCH status — 판정과 쓰기를 한 트랜잭션에 묶는다 (#5
   it("쓰기 전에 잠금을 건다", async () => {
     await PATCH(
       asAdmin(URL, { method: "PATCH", body: { status: "INACTIVE" } }),
-      params("1")
+      params("1"),
     );
 
     // 판정과 쓰기 사이에 다른 요청이 끼면 관리자가 0명이 될 수 있다.
     expect(prisma.$executeRaw).toHaveBeenCalled();
     const lockOrder = vi.mocked(prisma.$executeRaw).mock.invocationCallOrder[0];
-    const updateOrder = vi.mocked(prisma.salesRep.update).mock.invocationCallOrder[0];
+    const updateOrder = vi.mocked(prisma.salesRep.update).mock
+      .invocationCallOrder[0];
     expect(lockOrder).toBeLessThan(updateOrder);
   });
 
   it("잘못된 요청에는 트랜잭션을 열지 않는다", async () => {
-    await PATCH(asAdmin(URL, { method: "PATCH", body: { status: "DELETED" } }), params("1"));
+    await PATCH(
+      asAdmin(URL, { method: "PATCH", body: { status: "DELETED" } }),
+      params("1"),
+    );
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

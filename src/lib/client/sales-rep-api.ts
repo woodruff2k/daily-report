@@ -65,7 +65,9 @@ function query(filters: SalesRepFilters): string {
 }
 
 export function listSalesReps(filters: SalesRepFilters = {}) {
-  return apiFetch<PageResponse<SalesRepListItem>>(`/api/sales-reps${query(filters)}`);
+  return apiFetch<PageResponse<SalesRepListItem>>(
+    `/api/sales-reps${query(filters)}`,
+  );
 }
 
 export function getSalesRep(repId: number) {
@@ -113,6 +115,6 @@ export function changeSalesRepStatus(repId: number, status: RepStatus) {
 export function resetSalesRepPassword(repId: number) {
   return apiFetch<{ repId: number; empNo: string; temporaryPassword: string }>(
     `/api/sales-reps/${repId}/password/reset`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }

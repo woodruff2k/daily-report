@@ -47,11 +47,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const repId = parseRepIdParam((await context.params).repId);
     const parsed = salesRepUpdateSchema.safeParse(
-      await request.json().catch(() => null)
+      await request.json().catch(() => null),
     );
 
     if (!parsed.success) {
-      throw new ValidationError("필수 항목이 누락되었거나 형식이 올바르지 않습니다.");
+      throw new ValidationError(
+        "필수 항목이 누락되었거나 형식이 올바르지 않습니다.",
+      );
     }
 
     const { managerId, ...fields } = parsed.data;

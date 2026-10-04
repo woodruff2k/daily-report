@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const repId = parseRepIdParam((await context.params).repId);
     const parsed = salesRepStatusSchema.safeParse(
-      await request.json().catch(() => null)
+      await request.json().catch(() => null),
     );
 
     if (!parsed.success) {
@@ -44,7 +44,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           status: parsed.data.status,
           // 비활성화는 즉시 효력이 있어야 한다. 버전을 올려 그 계정의 기존
           // 토큰을 끊는다. 재활성화는 끊을 이유가 없다. (이슈 #52)
-          tokenVersion: parsed.data.status === "INACTIVE" ? { increment: 1 } : undefined,
+          tokenVersion:
+            parsed.data.status === "INACTIVE" ? { increment: 1 } : undefined,
         },
       });
     });

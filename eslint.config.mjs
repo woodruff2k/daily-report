@@ -13,7 +13,10 @@ const eslintConfig = [
     },
     rules: {
       // 미사용 변수 오류 처리
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_" },
+      ],
       // any 타입 사용 경고
       "@typescript-eslint/no-explicit-any": "warn",
       // 비동기 함수에서 await 누락 방지 (type-aware)

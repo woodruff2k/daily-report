@@ -22,7 +22,10 @@ export const ACTIVE_REP: SalesRep = {
 export const INACTIVE_REP: SalesRep = { ...ACTIVE_REP, status: "INACTIVE" };
 
 /** 관리자가 임시 비밀번호를 발급한 상태. 본인이 바꿔야 한다. (이슈 #44) */
-export const MUST_CHANGE_REP: SalesRep = { ...ACTIVE_REP, mustChangePassword: true };
+export const MUST_CHANGE_REP: SalesRep = {
+  ...ACTIVE_REP,
+  mustChangePassword: true,
+};
 
 /** 테스트 전용 더미 비밀번호. 실제 자격증명이 아니다. */
 export const PASSWORD = "synthetic-password";

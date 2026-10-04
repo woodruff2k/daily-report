@@ -22,10 +22,17 @@ export async function POST(request: NextRequest) {
 
   // Always run the hash comparison, even when no account is found, so response
   // timing doesn't reveal whether the loginId exists (see verifyPassword).
-  const passwordValid = await verifyPassword(password, rep?.passwordHash ?? null);
+  const passwordValid = await verifyPassword(
+    password,
+    rep?.passwordHash ?? null,
+  );
 
   if (!rep || !passwordValid) {
-    return apiError("UNAUTHORIZED", "아이디 또는 비밀번호가 올바르지 않습니다.", 401);
+    return apiError(
+      "UNAUTHORIZED",
+      "아이디 또는 비밀번호가 올바르지 않습니다.",
+      401,
+    );
   }
 
   if (rep.status !== "ACTIVE") {

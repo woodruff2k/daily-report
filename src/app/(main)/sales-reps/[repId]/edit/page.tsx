@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import SalesRepForm from "../../sales-rep-form";
-import { getSalesRep, type SalesRepFormValues } from "@/lib/client/sales-rep-api";
+import {
+  getSalesRep,
+  type SalesRepFormValues,
+} from "@/lib/client/sales-rep-api";
 import { useAdminRedirect } from "@/lib/client/use-admin-guard";
 
 /** SCR-510 수정. 기존 값을 불러온 뒤 폼을 그린다. */

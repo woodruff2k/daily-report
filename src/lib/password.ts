@@ -14,7 +14,7 @@ export function hashPassword(password: string): Promise<string> {
 
 export function verifyPassword(
   password: string,
-  passwordHash: string | null
+  passwordHash: string | null,
 ): Promise<boolean> {
   return bcrypt.compare(password, passwordHash ?? DUMMY_HASH);
 }

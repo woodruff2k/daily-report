@@ -39,10 +39,16 @@ function pageResponse(content: unknown[]) {
   return new Response(
     JSON.stringify({
       success: true,
-      data: { content, page: 0, size: 50, totalElements: content.length, totalPages: 1 },
+      data: {
+        content,
+        page: 0,
+        size: 50,
+        totalElements: content.length,
+        totalPages: 1,
+      },
       error: null,
     }),
-    { status: 200, headers: { "content-type": "application/json" } }
+    { status: 200, headers: { "content-type": "application/json" } },
   );
 }
 
@@ -50,7 +56,7 @@ function loginAs(role: string) {
   window.localStorage.setItem("daily-report.accessToken", "admin.token");
   window.localStorage.setItem(
     "daily-report.rep",
-    JSON.stringify({ repId: 4, name: "시스템관리자", role })
+    JSON.stringify({ repId: 4, name: "시스템관리자", role }),
   );
 }
 
@@ -112,7 +118,9 @@ describe("SCR-500 영업 마스터 목록 — #17", () => {
   });
 
   it("검색 조건을 쿼리로 넘긴다", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(pageResponse(ROWS));
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(pageResponse(ROWS));
     render(<SalesRepListPage />);
     await screen.findByText("S2026002");
 
@@ -128,7 +136,9 @@ describe("SCR-500 영업 마스터 목록 — #17", () => {
   });
 
   it("빈 조건은 쿼리에 넣지 않는다", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(pageResponse(ROWS));
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(pageResponse(ROWS));
     render(<SalesRepListPage />);
     await screen.findByText("S2026002");
 
@@ -145,7 +155,9 @@ describe("SCR-500 영업 마스터 목록 — #17", () => {
 
     render(<SalesRepListPage />);
 
-    expect(await screen.findByText("조회 결과가 없습니다.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("조회 결과가 없습니다."),
+    ).toBeInTheDocument();
   });
 
   it("조회가 실패하면 오류를 보여준다", async () => {
@@ -156,13 +168,15 @@ describe("SCR-500 영업 마스터 목록 — #17", () => {
           data: null,
           error: { code: "FORBIDDEN", message: "권한이 없습니다." },
         }),
-        { status: 403, headers: { "content-type": "application/json" } }
-      )
+        { status: 403, headers: { "content-type": "application/json" } },
+      ),
     );
 
     render(<SalesRepListPage />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("목록을 불러올 수 없습니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "목록을 불러올 수 없습니다.",
+    );
   });
 
   it("관리자가 아니면 내보낸다", async () => {

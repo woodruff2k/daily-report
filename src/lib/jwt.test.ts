@@ -13,21 +13,39 @@ afterEach(() => {
 
 describe("jwt", () => {
   it("signs and verifies a token round-trip", () => {
-    const payload = { repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false, tokenVersion: 0 };
+    const payload = {
+      repId: "1",
+      name: "홍길동",
+      role: "SALES_REP" as const,
+      mustChangePassword: false,
+      tokenVersion: 0,
+    };
     const token = signAccessToken(payload);
     const decoded = verifyAccessToken(token);
     expect(decoded).toMatchObject(payload);
   });
 
   it("throws on a tampered token", () => {
-    const token = signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false, tokenVersion: 0 });
+    const token = signAccessToken({
+      repId: "1",
+      name: "홍길동",
+      role: "SALES_REP" as const,
+      mustChangePassword: false,
+      tokenVersion: 0,
+    });
     expect(() => verifyAccessToken(`${token}tampered`)).toThrow();
   });
 
   it("throws when JWT_SECRET is not set", () => {
     delete process.env.JWT_SECRET;
     expect(() =>
-      signAccessToken({ repId: "1", name: "홍길동", role: "SALES_REP" as const, mustChangePassword: false, tokenVersion: 0 })
+      signAccessToken({
+        repId: "1",
+        name: "홍길동",
+        role: "SALES_REP" as const,
+        mustChangePassword: false,
+        tokenVersion: 0,
+      }),
     ).toThrow("JWT_SECRET");
   });
 });

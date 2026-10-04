@@ -11,6 +11,6 @@ describe("idSchema — #47", () => {
     (value) => {
       // 안전 정수를 넘는 값은 BigInt 변환 과정에서 정밀도를 잃는다.
       expect(idSchema.safeParse(value).success).toBe(false);
-    }
+    },
   );
 });

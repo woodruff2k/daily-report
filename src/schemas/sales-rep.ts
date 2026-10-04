@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/password-policy";
 import { idSchema } from "./identifier";
 
 /**
@@ -32,7 +35,11 @@ export const salesRepCreateSchema = z.object({
    * 선택 항목. 생략하면 서버가 임시 비밀번호를 만들어 응답에 1회 반환한다.
    * 어느 경우든 최초 로그인 시 변경을 강제한다. (이슈 #44)
    */
-  password: z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH).optional(),
+  password: z
+    .string()
+    .min(MIN_PASSWORD_LENGTH)
+    .max(MAX_PASSWORD_LENGTH)
+    .optional(),
 });
 
 /**
@@ -45,10 +52,12 @@ export const salesRepCreateSchema = z.object({
  *
  * 화면(SCR-510)에서 역할·상태는 모두 필수 항목이므로 정상 요청은 영향이 없다.
  */
-export const salesRepUpdateSchema = salesRepCreateSchema.omit({ password: true }).extend({
-  role: roleSchema,
-  status: repStatusSchema,
-});
+export const salesRepUpdateSchema = salesRepCreateSchema
+  .omit({ password: true })
+  .extend({
+    role: roleSchema,
+    status: repStatusSchema,
+  });
 
 /** 비활성화. 상태 전환만 허용한다. (NFR-03, API 명세 6.4) */
 export const salesRepStatusSchema = z.object({

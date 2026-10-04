@@ -13,7 +13,9 @@ describe("toJsonId — #47", () => {
   });
 
   it("안전 정수 경계값은 통과한다", () => {
-    expect(toJsonId(BigInt(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER);
+    expect(toJsonId(BigInt(Number.MAX_SAFE_INTEGER))).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
   });
 
   it("안전 정수를 넘으면 던진다", () => {

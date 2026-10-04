@@ -16,7 +16,9 @@ export const SALES_REP_SORT_FIELDS = [
  * `keyword`는 이름과 사번을 함께 본다. 화면(SCR-500)의 검색 조건이 "이름/사번"
  * 한 칸이기 때문이다. 대소문자는 구분하지 않는다.
  */
-export function buildSalesRepWhere(params: URLSearchParams): Prisma.SalesRepWhereInput {
+export function buildSalesRepWhere(
+  params: URLSearchParams,
+): Prisma.SalesRepWhereInput {
   const where: Prisma.SalesRepWhereInput = {};
 
   const keyword = params.get("keyword")?.trim();
@@ -37,7 +39,9 @@ export function buildSalesRepWhere(params: URLSearchParams): Prisma.SalesRepWher
   const role = params.get("role")?.trim();
   if (role) {
     if (role !== "SALES_REP" && role !== "MANAGER" && role !== "ADMIN") {
-      throw new ValidationError("role은 SALES_REP, MANAGER, ADMIN 중 하나여야 합니다.");
+      throw new ValidationError(
+        "role은 SALES_REP, MANAGER, ADMIN 중 하나여야 합니다.",
+      );
     }
     where.role = role;
   }

@@ -5,7 +5,7 @@ describe("password", () => {
   it("hashes a password and verifies it correctly", async () => {
     const hash = await hashPassword("correct-horse-battery-staple");
     await expect(
-      verifyPassword("correct-horse-battery-staple", hash)
+      verifyPassword("correct-horse-battery-staple", hash),
     ).resolves.toBe(true);
   });
 

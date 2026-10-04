@@ -32,7 +32,7 @@ function headers(entries: Record<string, string>): Headers {
 function expectHttpError(
   fn: () => unknown,
   status: number,
-  type: typeof HttpError = AuthorizationError
+  type: typeof HttpError = AuthorizationError,
 ) {
   expect(fn).toThrow(type);
   try {
@@ -45,7 +45,7 @@ function expectHttpError(
 describe("parseAuthContext", () => {
   it("프록시가 심은 헤더를 컨텍스트로 변환한다", () => {
     const auth = parseAuthContext(
-      headers({ "x-user-rep-id": "42", "x-user-role": "MANAGER" })
+      headers({ "x-user-rep-id": "42", "x-user-role": "MANAGER" }),
     );
     expect(auth).toEqual({ repId: 42n, role: "MANAGER" });
   });
@@ -56,15 +56,21 @@ describe("parseAuthContext", () => {
 
   it("역할 값이 정의되지 않은 것이면 401로 막는다", () => {
     expectHttpError(
-      () => parseAuthContext(headers({ "x-user-rep-id": "1", "x-user-role": "SUPERUSER" })),
-      401
+      () =>
+        parseAuthContext(
+          headers({ "x-user-rep-id": "1", "x-user-role": "SUPERUSER" }),
+        ),
+      401,
     );
   });
 
   it("사원 식별자가 숫자가 아니면 401로 막는다", () => {
     expectHttpError(
-      () => parseAuthContext(headers({ "x-user-rep-id": "abc", "x-user-role": "SALES_REP" })),
-      401
+      () =>
+        parseAuthContext(
+          headers({ "x-user-rep-id": "abc", "x-user-role": "SALES_REP" }),
+        ),
+      401,
     );
   });
 });
@@ -117,7 +123,10 @@ describe("assertOwnerOrManager — TC-SEC-01 타인 보고 조회 차단", () =>
   });
 
   it("다른 팀 상급자는 403으로 막는다", () => {
-    expectHttpError(() => assertOwnerOrManager(MANAGER, OTHER_TEAM_MEMBER), 403);
+    expectHttpError(
+      () => assertOwnerOrManager(MANAGER, OTHER_TEAM_MEMBER),
+      403,
+    );
   });
 });
 
@@ -157,7 +166,10 @@ describe("assertTeamScope — TC-SEC-02 팀 범위 밖 조회 차단", () => {
   });
 
   it("범위 밖 사원이 섞이면 403으로 막는다", () => {
-    expectHttpError(() => assertTeamScope(MANAGER, [1n, 99n], subordinates), 403);
+    expectHttpError(
+      () => assertTeamScope(MANAGER, [1n, 99n], subordinates),
+      403,
+    );
   });
 
   it("상급자가 아니면 403으로 막는다", () => {
@@ -177,7 +189,10 @@ describe("assertCanComment — FR-09 / TC-SEC-04 댓글 작성 권한", () => {
 
   const SUBMITTED = { author: TEAM_MEMBER, status: "SUBMITTED" } as const;
   const DRAFT = { author: TEAM_MEMBER, status: "DRAFT" } as const;
-  const OTHER_TEAM = { author: OTHER_TEAM_MEMBER, status: "SUBMITTED" } as const;
+  const OTHER_TEAM = {
+    author: OTHER_TEAM_MEMBER,
+    status: "SUBMITTED",
+  } as const;
 
   it("직속 상급자는 제출된 보고에 댓글을 쓸 수 있다", () => {
     expect(() => assertCanComment(MANAGER, SUBMITTED, ROOT)).not.toThrow();
@@ -208,7 +223,11 @@ describe("assertCanComment — FR-09 / TC-SEC-04 댓글 작성 권한", () => {
   });
 
   it("제출되지 않은 보고에는 ConflictError(409)로 막는다", () => {
-    expectHttpError(() => assertCanComment(MANAGER, DRAFT, ROOT), 409, ConflictError);
+    expectHttpError(
+      () => assertCanComment(MANAGER, DRAFT, ROOT),
+      409,
+      ConflictError,
+    );
   });
 
   it("작성중 보고를 막을 때 REPORT_NOT_SUBMITTED 코드를 돌려준다", () => {
@@ -243,7 +262,10 @@ describe("assertCommentAuthor — TC-CMT-04 타인 댓글 수정 차단", () => 
 
 describe("assertReportEditable — TC-SUB-03 제출본 편집 차단", () => {
   const OWN_DRAFT = { repId: SALES_REP.repId, status: "DRAFT" } as const;
-  const OWN_SUBMITTED = { repId: SALES_REP.repId, status: "SUBMITTED" } as const;
+  const OWN_SUBMITTED = {
+    repId: SALES_REP.repId,
+    status: "SUBMITTED",
+  } as const;
   const OTHERS_DRAFT = { repId: 7n, status: "DRAFT" } as const;
 
   it("본인의 작성중 보고는 수정할 수 있다", () => {
@@ -251,7 +273,11 @@ describe("assertReportEditable — TC-SUB-03 제출본 편집 차단", () => {
   });
 
   it("제출된 보고는 ConflictError(409)로 막는다", () => {
-    expectHttpError(() => assertReportEditable(SALES_REP, OWN_SUBMITTED), 409, ConflictError);
+    expectHttpError(
+      () => assertReportEditable(SALES_REP, OWN_SUBMITTED),
+      409,
+      ConflictError,
+    );
   });
 
   it("제출된 보고를 막을 때 REPORT_LOCKED 코드를 돌려준다", () => {

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ApiClientError, apiFetch } from "@/lib/client/api-client";
 import { getAccessToken, replaceAccessToken } from "@/lib/client/auth-storage";
@@ -64,7 +69,7 @@ export default function PasswordChangePage() {
       setError(
         caught instanceof ApiClientError
           ? caught.message
-          : "비밀번호를 변경할 수 없습니다."
+          : "비밀번호를 변경할 수 없습니다.",
       );
     } finally {
       setSubmitting(false);
@@ -74,7 +79,9 @@ export default function PasswordChangePage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <form onSubmit={handleSubmit} className="w-full max-w-sm" noValidate>
-        <h1 className="mb-2 text-center text-xl font-semibold">비밀번호 변경</h1>
+        <h1 className="mb-2 text-center text-xl font-semibold">
+          비밀번호 변경
+        </h1>
         <p className="mb-6 text-center text-sm text-muted-foreground">
           임시 비밀번호를 바꾸기 전에는 다른 기능을 쓸 수 없습니다.
         </p>
@@ -113,7 +120,9 @@ export default function PasswordChangePage() {
             />
           </Field>
 
-          {error === null ? null : <FieldError role="alert">{error}</FieldError>}
+          {error === null ? null : (
+            <FieldError role="alert">{error}</FieldError>
+          )}
 
           <Button type="submit" disabled={submitting}>
             {submitting ? "변경 중…" : "변경"}

@@ -36,7 +36,7 @@ describe("parsePageRequest", () => {
     "%s 는 400으로 막는다",
     (query) => {
       expect(() => parse(query)).toThrow(ValidationError);
-    }
+    },
   );
 
   it("size 가 0이면 400으로 막는다", () => {

@@ -1,7 +1,11 @@
 import type { NextRequest } from "next/server";
 import { apiErrorResponse, apiSuccess } from "@/lib/api-response";
 import { parseAuthContext } from "@/lib/auth";
-import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
+import {
+  AuthorizationError,
+  NotFoundError,
+  ValidationError,
+} from "@/lib/errors";
 import { signAccessToken } from "@/lib/jwt";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
@@ -23,12 +27,12 @@ export async function PUT(request: NextRequest) {
     const auth = parseAuthContext(request.headers);
 
     const parsed = passwordChangeSchema.safeParse(
-      await request.json().catch(() => null)
+      await request.json().catch(() => null),
     );
 
     if (!parsed.success) {
       throw new ValidationError(
-        "현재 비밀번호와 새 비밀번호(12자 이상)를 입력하세요."
+        "현재 비밀번호와 새 비밀번호(12자 이상)를 입력하세요.",
       );
     }
 
@@ -47,7 +51,7 @@ export async function PUT(request: NextRequest) {
       throw new AuthorizationError(
         "UNAUTHORIZED",
         "현재 비밀번호가 올바르지 않습니다.",
-        401
+        401,
       );
     }
 

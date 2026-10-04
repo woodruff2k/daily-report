@@ -112,12 +112,12 @@ const MANAGER_CHAIN_LIMIT = 20;
  */
 export async function assertManagerAssignable(
   managerId: bigint,
-  selfRepId?: bigint
+  selfRepId?: bigint,
 ): Promise<void> {
   if (selfRepId !== undefined && managerId === selfRepId) {
     throw new ValidationError(
       "자기 자신을 상급자로 지정할 수 없습니다.",
-      "SELF_MANAGER"
+      "SELF_MANAGER",
     );
   }
 
@@ -129,21 +129,21 @@ export async function assertManagerAssignable(
   if (!manager) {
     throw new ValidationError(
       "상급자로 지정한 영업사원을 찾을 수 없습니다.",
-      "MANAGER_NOT_FOUND"
+      "MANAGER_NOT_FOUND",
     );
   }
 
   if (manager.status !== "ACTIVE") {
     throw new ValidationError(
       "비활성 사원을 상급자로 지정할 수 없습니다. 기존 관계는 그대로 유지됩니다.",
-      "MANAGER_INACTIVE"
+      "MANAGER_INACTIVE",
     );
   }
 
   if (manager.role !== "MANAGER") {
     throw new ValidationError(
       "상급자로 지정할 사원의 역할이 MANAGER 여야 합니다. 대상 사원의 역할을 먼저 바꾸세요.",
-      "MANAGER_ROLE_REQUIRED"
+      "MANAGER_ROLE_REQUIRED",
     );
   }
 
@@ -159,22 +159,24 @@ export async function assertManagerAssignable(
  */
 async function assertNoManagerCycle(
   startManagerId: bigint | null,
-  selfRepId: bigint
+  selfRepId: bigint,
 ): Promise<void> {
   let cursor = startManagerId;
 
-  for (let depth = 0; cursor !== null && depth < MANAGER_CHAIN_LIMIT; depth += 1) {
+  for (
+    let depth = 0;
+    cursor !== null && depth < MANAGER_CHAIN_LIMIT;
+    depth += 1
+  ) {
     if (cursor === selfRepId) {
-      throw new ValidationError(
-        "상급자 관계가 순환합니다.",
-        "MANAGER_CYCLE"
-      );
+      throw new ValidationError("상급자 관계가 순환합니다.", "MANAGER_CYCLE");
     }
 
-    const next: { managerId: bigint | null } | null = await prisma.salesRep.findUnique({
-      where: { repId: cursor },
-      select: { managerId: true },
-    });
+    const next: { managerId: bigint | null } | null =
+      await prisma.salesRep.findUnique({
+        where: { repId: cursor },
+        select: { managerId: true },
+      });
 
     cursor = next?.managerId ?? null;
   }
@@ -198,7 +200,7 @@ async function assertNoManagerCycle(
 export async function assertNotLastActiveAdmin(
   tx: DbClient,
   repId: bigint,
-  next: { role?: SalesRep["role"]; status?: SalesRep["status"] }
+  next: { role?: SalesRep["role"]; status?: SalesRep["status"] },
 ): Promise<void> {
   const current = await tx.salesRep.findUnique({
     where: { repId },
@@ -224,7 +226,7 @@ export async function assertNotLastActiveAdmin(
   if (others === 0) {
     throw new ConflictError(
       "LAST_ACTIVE_ADMIN",
-      "마지막 활성 관리자입니다. 다른 관리자를 먼저 만드세요."
+      "마지막 활성 관리자입니다. 다른 관리자를 먼저 만드세요.",
     );
   }
 }

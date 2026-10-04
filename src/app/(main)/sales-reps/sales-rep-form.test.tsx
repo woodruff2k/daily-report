@@ -46,7 +46,13 @@ function json(status: number, body: unknown) {
 function managerListResponse() {
   return json(200, {
     success: true,
-    data: { content: MANAGERS, page: 0, size: 100, totalElements: 1, totalPages: 1 },
+    data: {
+      content: MANAGERS,
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    },
     error: null,
   });
 }
@@ -101,7 +107,9 @@ describe("SCR-510 등록 — #17", () => {
 
     render(<SalesRepForm />);
 
-    expect(await screen.findByRole("option", { name: "김부장 (S2026001)" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "김부장 (S2026001)" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "없음" })).toBeInTheDocument();
   });
 
@@ -121,9 +129,13 @@ describe("SCR-510 등록 — #17", () => {
     mockFetch(
       json(201, {
         success: true,
-        data: { repId: 9, empNo: "S9999", temporaryPassword: "generated-temp-xyz" },
+        data: {
+          repId: 9,
+          empNo: "S9999",
+          temporaryPassword: "generated-temp-xyz",
+        },
         error: null,
-      })
+      }),
     );
     render(<SalesRepForm />);
     await screen.findByLabelText("사번");
@@ -143,8 +155,11 @@ describe("SCR-510 등록 — #17", () => {
       json(409, {
         success: false,
         data: null,
-        error: { code: "DUPLICATE_EMP_NO", message: "이미 사용 중인 사번입니다." },
-      })
+        error: {
+          code: "DUPLICATE_EMP_NO",
+          message: "이미 사용 중인 사번입니다.",
+        },
+      }),
     );
     render(<SalesRepForm />);
     await screen.findByLabelText("사번");
@@ -152,12 +167,18 @@ describe("SCR-510 등록 — #17", () => {
     const user = await fillRequired();
     await user.click(screen.getByRole("button", { name: "저장" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("이미 사용 중인 사번입니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이미 사용 중인 사번입니다.",
+    );
   });
 
   it("선택 항목을 비워 두면 그 필드를 보내지 않는다", async () => {
     const fetchMock = mockFetch(
-      json(201, { success: true, data: { repId: 9, empNo: "S9999" }, error: null })
+      json(201, {
+        success: true,
+        data: { repId: 9, empNo: "S9999" },
+        error: null,
+      }),
     );
     render(<SalesRepForm />);
     await screen.findByLabelText("사번");
@@ -179,9 +200,11 @@ describe("SCR-510 등록 — #17", () => {
     render(<SalesRepForm />);
     await screen.findByLabelText("사번");
 
-    expect(screen.queryByRole("button", { name: "비활성화" })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "임시 비밀번호 재발급" })
+      screen.queryByRole("button", { name: "비활성화" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "임시 비밀번호 재발급" }),
     ).not.toBeInTheDocument();
   });
 });
@@ -194,7 +217,9 @@ describe("SCR-510 수정 — #17", () => {
 
     expect(screen.getByLabelText("사번")).toHaveValue("S2026002");
     expect(screen.getByLabelText("이메일")).toHaveValue("hong@example.com");
-    await waitFor(() => expect(screen.getByLabelText("상급자")).toHaveValue("1"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("상급자")).toHaveValue("1"),
+    );
   });
 
   it("상급자 목록에서 본인을 제외한다", async () => {
@@ -203,13 +228,15 @@ describe("SCR-510 수정 — #17", () => {
     render(<SalesRepForm repId={1} initialValues={EDIT_VALUES} />);
 
     await waitFor(() =>
-      expect(screen.queryByRole("option", { name: "김부장 (S2026001)" })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("option", { name: "김부장 (S2026001)" }),
+      ).not.toBeInTheDocument(),
     );
   });
 
   it("저장하면 PUT 으로 보내고 목록으로 돌아간다", async () => {
     const fetchMock = mockFetch(
-      json(200, { success: true, data: { repId: 2 }, error: null })
+      json(200, { success: true, data: { repId: 2 }, error: null }),
     );
     render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
 
@@ -223,11 +250,13 @@ describe("SCR-510 수정 — #17", () => {
 
   it("비활성화하면 PATCH 로 보낸다 (TC-REP-04)", async () => {
     const fetchMock = mockFetch(
-      json(200, { success: true, data: { repId: 2 }, error: null })
+      json(200, { success: true, data: { repId: 2 }, error: null }),
     );
     render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
 
-    await userEvent.setup().click(screen.getByRole("button", { name: "비활성화" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "비활성화" }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/sales-reps"));
     const [url, init] = fetchMock.mock.calls[1];
@@ -245,13 +274,17 @@ describe("SCR-510 수정 — #17", () => {
           code: "LAST_ACTIVE_ADMIN",
           message: "마지막 활성 관리자입니다. 다른 관리자를 먼저 만드세요.",
         },
-      })
+      }),
     );
     render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
 
-    await userEvent.setup().click(screen.getByRole("button", { name: "비활성화" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "비활성화" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("마지막 활성 관리자");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "마지막 활성 관리자",
+    );
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -259,9 +292,13 @@ describe("SCR-510 수정 — #17", () => {
     mockFetch(
       json(200, {
         success: true,
-        data: { repId: 2, empNo: "S2026002", temporaryPassword: "reissued-temp-xyz" },
+        data: {
+          repId: 2,
+          empNo: "S2026002",
+          temporaryPassword: "reissued-temp-xyz",
+        },
         error: null,
-      })
+      }),
     );
     render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
 
@@ -269,7 +306,9 @@ describe("SCR-510 수정 — #17", () => {
       .setup()
       .click(screen.getByRole("button", { name: "임시 비밀번호 재발급" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("reissued-temp-xyz");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "reissued-temp-xyz",
+    );
     expect(push).not.toHaveBeenCalled();
   });
 });

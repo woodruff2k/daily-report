@@ -49,7 +49,7 @@ async function main() {
 
   if (existingAdmin) {
     throw new Error(
-      `이미 활성 관리자(${existingAdmin.empNo})가 있습니다. 추가 관리자는 API로 등록하세요.`
+      `이미 활성 관리자(${existingAdmin.empNo})가 있습니다. 추가 관리자는 API로 등록하세요.`,
     );
   }
 
@@ -66,7 +66,9 @@ async function main() {
   });
 
   // 비밀번호와 이메일은 출력하지 않는다. (NFR-04)
-  console.log(`관리자 계정을 만들었습니다. repId=${created.repId} empNo=${created.empNo}`);
+  console.log(
+    `관리자 계정을 만들었습니다. repId=${created.repId} empNo=${created.empNo}`,
+  );
 }
 
 main()

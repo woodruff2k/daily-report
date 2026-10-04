@@ -44,7 +44,9 @@ describe("toSalesRepResponse — NFR-04", () => {
   });
 
   it("상급자가 없으면 managerId 는 null 이다", () => {
-    expect(toSalesRepResponse({ ...REP, managerId: null }).managerId).toBeNull();
+    expect(
+      toSalesRepResponse({ ...REP, managerId: null }).managerId,
+    ).toBeNull();
   });
 
   it("일시를 ISO 8601 문자열로 바꾼다", () => {
@@ -59,7 +61,9 @@ describe("toSalesRepResponse — NFR-04", () => {
 
 describe("assertManagerAssignable", () => {
   beforeEach(() => {
-    vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
+    vi.mocked(prisma.salesRep.findUnique)
+      .mockReset()
+      .mockResolvedValue(MANAGER_REP);
   });
 
   it("역할이 MANAGER 인 사원이면 통과한다", async () => {
@@ -80,7 +84,9 @@ describe("assertManagerAssignable", () => {
   });
 
   it("자기 자신을 지정하면 조회 없이 막는다", async () => {
-    await expect(assertManagerAssignable(1n, 1n)).rejects.toThrow(ValidationError);
+    await expect(assertManagerAssignable(1n, 1n)).rejects.toThrow(
+      ValidationError,
+    );
     expect(prisma.salesRep.findUnique).not.toHaveBeenCalled();
   });
 });
@@ -120,7 +126,9 @@ describe("toSalesRepListItem — NFR-04 목록 최소화 (#49)", () => {
 
 describe("assertManagerAssignable — 상태·순환 (#49)", () => {
   beforeEach(() => {
-    vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
+    vi.mocked(prisma.salesRep.findUnique)
+      .mockReset()
+      .mockResolvedValue(MANAGER_REP);
   });
 
   it("비활성 사원은 상급자로 지정할 수 없다", async () => {
@@ -130,7 +138,9 @@ describe("assertManagerAssignable — 상태·순환 (#49)", () => {
     });
 
     // 비활성 상급자는 로그인할 수 없어 그 팀의 보고를 아무도 검토하지 못한다.
-    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(ValidationError);
+    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(
+      ValidationError,
+    );
   });
 
   it("간접 순환(A→B→A)을 막는다", async () => {
@@ -139,10 +149,14 @@ describe("assertManagerAssignable — 상태·순환 (#49)", () => {
       where: { repId: bigint };
     }) =>
       Promise.resolve(
-        args.where.repId === 2n ? { ...MANAGER_REP, managerId: 1n } : { managerId: null }
+        args.where.repId === 2n
+          ? { ...MANAGER_REP, managerId: 1n }
+          : { managerId: null },
       )) as never);
 
-    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(ValidationError);
+    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(
+      ValidationError,
+    );
   });
 
   it("세 단계 순환(A→B→C→A)도 막는다", async () => {
@@ -155,7 +169,9 @@ describe("assertManagerAssignable — 상태·순환 (#49)", () => {
         managerId: chain[args.where.repId.toString()] ?? null,
       })) as never);
 
-    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(ValidationError);
+    await expect(assertManagerAssignable(2n, 1n)).rejects.toThrow(
+      ValidationError,
+    );
   });
 
   it("순환이 아니면 통과한다", async () => {
@@ -173,21 +189,23 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
   const ADMIN_REP = { role: "ADMIN" as const, status: "ACTIVE" as const };
 
   beforeEach(() => {
-    vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(ADMIN_REP as never);
+    vi.mocked(prisma.salesRep.findUnique)
+      .mockReset()
+      .mockResolvedValue(ADMIN_REP as never);
     vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(0);
   });
 
   it("마지막 관리자를 강등하면 409로 막는다", async () => {
     // #52 이후로는 토큰까지 끊겨 되돌릴 방법이 DB 수정뿐이다.
-    await expect(assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" })).rejects.toThrow(
-      ConflictError
-    );
+    await expect(
+      assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" }),
+    ).rejects.toThrow(ConflictError);
   });
 
   it("마지막 관리자를 비활성화하면 409로 막는다", async () => {
-    await expect(assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" })).rejects.toThrow(
-      ConflictError
-    );
+    await expect(
+      assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" }),
+    ).rejects.toThrow(ConflictError);
   });
 
   it("다른 활성 관리자가 있으면 허용한다", async () => {
@@ -195,7 +213,7 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
 
     // 관리자가 여럿일 때 교체·정리는 정상 작업이다.
     await expect(
-      assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" })
+      assertNotLastActiveAdmin(prisma, 1n, { role: "SALES_REP" }),
     ).resolves.toBeUndefined();
   });
 
@@ -206,14 +224,14 @@ describe("assertNotLastActiveAdmin — 잠금 방지 (#49)", () => {
     } as never);
 
     await expect(
-      assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" })
+      assertNotLastActiveAdmin(prisma, 1n, { status: "INACTIVE" }),
     ).resolves.toBeUndefined();
     expect(prisma.salesRep.count).not.toHaveBeenCalled();
   });
 
   it("관리자 역할·상태를 유지하는 수정은 막지 않는다", async () => {
     await expect(
-      assertNotLastActiveAdmin(prisma, 1n, { role: "ADMIN", status: "ACTIVE" })
+      assertNotLastActiveAdmin(prisma, 1n, { role: "ADMIN", status: "ACTIVE" }),
     ).resolves.toBeUndefined();
     expect(prisma.salesRep.count).not.toHaveBeenCalled();
   });

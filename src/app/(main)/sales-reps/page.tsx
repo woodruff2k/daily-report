@@ -14,7 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiClientError } from "@/lib/client/api-client";
-import { listSalesReps, type SalesRepListItem } from "@/lib/client/sales-rep-api";
+import {
+  listSalesReps,
+  type SalesRepListItem,
+} from "@/lib/client/sales-rep-api";
 import { useAdminRedirect } from "@/lib/client/use-admin-guard";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -43,12 +46,19 @@ export default function SalesRepListPage() {
     setLoading(true);
     setError(null);
     try {
-      const page = await listSalesReps({ keyword, department, status, size: 50 });
+      const page = await listSalesReps({
+        keyword,
+        department,
+        status,
+        size: 50,
+      });
       setReps(page.content);
       setTotal(page.totalElements);
     } catch (caught) {
       setError(
-        caught instanceof ApiClientError ? caught.message : "목록을 불러올 수 없습니다."
+        caught instanceof ApiClientError
+          ? caught.message
+          : "목록을 불러올 수 없습니다.",
       );
     } finally {
       setLoading(false);
