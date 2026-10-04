@@ -108,7 +108,15 @@ make test           # npm test
 make test-coverage  # npm run test:coverage
 ```
 
-커밋 시 husky와 lint-staged가 변경된 TypeScript 파일에 ESLint를 자동 실행한다.
+커밋 시 husky와 lint-staged가 변경된 파일에 prettier와 ESLint를 자동 실행한다. 포맷 기준은 `.prettierrc`에 있고 prettier 버전은 고정되어 있다. 전체를 직접 맞추려면 `npm run format`, 확인만 하려면 `npm run format:check`를 쓴다.
+
+마크다운은 포맷 대상에서 제외했다(`.prettierignore`). prettier가 표 칸을 글자 수로 세어 padding을 넣는데, 한글은 한 글자가 두 칸 폭이라 모노스페이스 편집기에서 오히려 어긋나 보인다.
+
+포맷만 바꾼 커밋이 `git blame`을 덮지 않도록 한 번 설정해 둔다.
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
 
 ### Git worktree
 

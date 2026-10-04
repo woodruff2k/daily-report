@@ -11,7 +11,9 @@ describe("loginRequestSchema", () => {
   });
 
   it("rejects a missing password", () => {
-    const result = loginRequestSchema.safeParse({ loginId: "hong@company.com" });
+    const result = loginRequestSchema.safeParse({
+      loginId: "hong@company.com",
+    });
     expect(result.success).toBe(false);
   });
 

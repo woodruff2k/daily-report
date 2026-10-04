@@ -42,7 +42,10 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-function request(url: string, { method = "GET", body, headers }: RequestOptions = {}) {
+function request(
+  url: string,
+  { method = "GET", body, headers }: RequestOptions = {},
+) {
   return new NextRequest(url, {
     method,
     headers: { "content-type": "application/json", ...headers },
@@ -52,12 +55,18 @@ function request(url: string, { method = "GET", body, headers }: RequestOptions 
 
 /** 프록시가 ADMIN 토큰을 검증한 뒤의 요청. */
 export function asAdmin(url: string, options: RequestOptions = {}) {
-  return request(url, { ...options, headers: { ...ADMIN_HEADERS, ...options.headers } });
+  return request(url, {
+    ...options,
+    headers: { ...ADMIN_HEADERS, ...options.headers },
+  });
 }
 
 /** 영업사원 권한 요청. 관리자 전용 API에서 403이어야 한다. (TC-SEC-03) */
 export function asSalesRep(url: string, options: RequestOptions = {}) {
-  return request(url, { ...options, headers: { ...SALES_REP_HEADERS, ...options.headers } });
+  return request(url, {
+    ...options,
+    headers: { ...SALES_REP_HEADERS, ...options.headers },
+  });
 }
 
 /** 프록시를 거치지 않아 인증 헤더가 없는 요청. */

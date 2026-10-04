@@ -1,0 +1,17 @@
+# 생성물
+.next
+node_modules
+coverage
+
+# Prisma 가 생성·관리한다
+prisma/migrations
+
+# 마크다운 전체를 제외한다.
+#
+# prettier 는 표 칸을 글자 수로 세어 padding 을 넣는데, 한글은 한 글자가 두 칸
+# 폭이라 모노스페이스 편집기에서 오히려 어긋나 보인다("구분" = 2자, 4칸).
+# 문서는 손으로 맞춘 정렬을 유지한다.
+*.md
+
+# 루트 설정 파일 중 생성물
+next-env.d.ts

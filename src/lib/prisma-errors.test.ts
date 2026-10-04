@@ -12,11 +12,15 @@ function prismaError(code: string, target?: unknown) {
 
 describe("uniqueConstraintFields", () => {
   it("P2002 의 충돌 필드를 돌려준다", () => {
-    expect(uniqueConstraintFields(prismaError("P2002", ["email"]))).toEqual(["email"]);
+    expect(uniqueConstraintFields(prismaError("P2002", ["email"]))).toEqual([
+      "email",
+    ]);
   });
 
   it("target 이 문자열이어도 배열로 돌려준다", () => {
-    expect(uniqueConstraintFields(prismaError("P2002", "empNo"))).toEqual(["empNo"]);
+    expect(uniqueConstraintFields(prismaError("P2002", "empNo"))).toEqual([
+      "empNo",
+    ]);
   });
 
   it("다른 코드면 null 이다", () => {
@@ -45,13 +49,16 @@ describe("mapSalesRepWriteError — TC-REP-02 중복 차단", () => {
   });
 
   it("이메일 중복은 409 DUPLICATE_EMAIL 다", () => {
-    expect((mapSalesRepWriteError(prismaError("P2002", ["email"])) as ConflictError).code).toBe(
-      "DUPLICATE_EMAIL"
-    );
+    expect(
+      (mapSalesRepWriteError(prismaError("P2002", ["email"])) as ConflictError)
+        .code,
+    ).toBe("DUPLICATE_EMAIL");
   });
 
   it("대상 없음은 404 다", () => {
-    expect(mapSalesRepWriteError(prismaError("P2025"))).toBeInstanceOf(NotFoundError);
+    expect(mapSalesRepWriteError(prismaError("P2025"))).toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it("그 밖의 오류는 그대로 돌려준다", () => {

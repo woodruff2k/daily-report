@@ -5,8 +5,6 @@ import Home from "./page";
 describe("Home", () => {
   it("renders the project title", () => {
     render(<Home />);
-    expect(
-      screen.getByText("영업 일일 보고 시스템")
-    ).toBeInTheDocument();
+    expect(screen.getByText("영업 일일 보고 시스템")).toBeInTheDocument();
   });
 });

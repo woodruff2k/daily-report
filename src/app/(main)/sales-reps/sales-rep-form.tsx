@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ApiClientError } from "@/lib/client/api-client";
 import {
@@ -49,7 +54,9 @@ interface Props {
 export default function SalesRepForm({ repId, initialValues }: Props) {
   const router = useRouter();
   const isEdit = repId !== undefined;
-  const [values, setValues] = useState<SalesRepFormValues>(initialValues ?? EMPTY);
+  const [values, setValues] = useState<SalesRepFormValues>(
+    initialValues ?? EMPTY,
+  );
   const [managers, setManagers] = useState<SalesRepListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,9 +66,11 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
     let cancelled = false;
 
     void (async () => {
-      const page = await listSalesReps({ role: "MANAGER", status: "ACTIVE", size: 100 }).catch(
-        () => null
-      );
+      const page = await listSalesReps({
+        role: "MANAGER",
+        status: "ACTIVE",
+        size: 100,
+      }).catch(() => null);
 
       if (!cancelled && page !== null) {
         setManagers(page.content.filter((rep) => rep.repId !== repId));
@@ -75,7 +84,7 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
 
   function update<K extends keyof SalesRepFormValues>(
     key: K,
-    value: SalesRepFormValues[K]
+    value: SalesRepFormValues[K],
   ) {
     setValues((previous) => ({ ...previous, [key]: value }));
   }
@@ -113,11 +122,15 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
       }
 
       setNotice(
-        `등록했습니다. 임시 비밀번호: ${created.temporaryPassword} — 다시 볼 수 없으므로 본인에게 전달하세요.`
+        `등록했습니다. 임시 비밀번호: ${created.temporaryPassword} — 다시 볼 수 없으므로 본인에게 전달하세요.`,
       );
       setValues(EMPTY);
     } catch (caught) {
-      setError(caught instanceof ApiClientError ? caught.message : "저장할 수 없습니다.");
+      setError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "저장할 수 없습니다.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -136,7 +149,9 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
       router.push("/sales-reps");
     } catch (caught) {
       setError(
-        caught instanceof ApiClientError ? caught.message : "비활성화할 수 없습니다."
+        caught instanceof ApiClientError
+          ? caught.message
+          : "비활성화할 수 없습니다.",
       );
     } finally {
       setSubmitting(false);
@@ -154,10 +169,14 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
     try {
       const result = await resetSalesRepPassword(repId);
       setNotice(
-        `임시 비밀번호: ${result.temporaryPassword} — 다시 볼 수 없으므로 본인에게 전달하세요.`
+        `임시 비밀번호: ${result.temporaryPassword} — 다시 볼 수 없으므로 본인에게 전달하세요.`,
       );
     } catch (caught) {
-      setError(caught instanceof ApiClientError ? caught.message : "재발급할 수 없습니다.");
+      setError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "재발급할 수 없습니다.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -256,7 +275,10 @@ export default function SalesRepForm({ repId, initialValues }: Props) {
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
             value={values.status}
             onChange={(event) =>
-              update("status", event.target.value as SalesRepFormValues["status"])
+              update(
+                "status",
+                event.target.value as SalesRepFormValues["status"],
+              )
             }
           >
             <option value="ACTIVE">활성</option>

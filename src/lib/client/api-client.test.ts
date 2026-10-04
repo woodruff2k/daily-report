@@ -22,36 +22,54 @@ afterEach(() => {
 describe("apiFetch — #11", () => {
   it("공통 구조에서 data 만 꺼낸다", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse(200, { success: true, data: { repId: 1 }, error: null })
+      jsonResponse(200, { success: true, data: { repId: 1 }, error: null }),
     );
 
     await expect(apiFetch("/api/x")).resolves.toEqual({ repId: 1 });
   });
 
   it("저장된 토큰을 Authorization 헤더로 붙인다", async () => {
-    saveSession("stored.token", { repId: 1, name: "홍길동", role: "SALES_REP" });
+    saveSession("stored.token", {
+      repId: 1,
+      name: "홍길동",
+      role: "SALES_REP",
+    });
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(jsonResponse(200, { success: true, data: null, error: null }));
+      .mockResolvedValue(
+        jsonResponse(200, { success: true, data: null, error: null }),
+      );
 
     await apiFetch("/api/x");
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init?.headers as Record<string, string>).authorization).toBe(
-      "Bearer stored.token"
+      "Bearer stored.token",
     );
   });
 
   it("anonymous 요청에는 토큰을 붙이지 않는다", async () => {
-    saveSession("stored.token", { repId: 1, name: "홍길동", role: "SALES_REP" });
+    saveSession("stored.token", {
+      repId: 1,
+      name: "홍길동",
+      role: "SALES_REP",
+    });
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(jsonResponse(200, { success: true, data: null, error: null }));
+      .mockResolvedValue(
+        jsonResponse(200, { success: true, data: null, error: null }),
+      );
 
-    await apiFetch("/api/auth/login", { method: "POST", body: {}, anonymous: true });
+    await apiFetch("/api/auth/login", {
+      method: "POST",
+      body: {},
+      anonymous: true,
+    });
 
     const [, init] = fetchMock.mock.calls[0];
-    expect((init?.headers as Record<string, string>).authorization).toBeUndefined();
+    expect(
+      (init?.headers as Record<string, string>).authorization,
+    ).toBeUndefined();
   });
 
   it("오류 응답을 ApiClientError 로 바꾼다", async () => {
@@ -60,7 +78,7 @@ describe("apiFetch — #11", () => {
         success: false,
         data: null,
         error: { code: "FORBIDDEN", message: "권한이 없습니다." },
-      })
+      }),
     );
 
     await expect(apiFetch("/api/x")).rejects.toThrow(ApiClientError);
@@ -72,7 +90,7 @@ describe("apiFetch — #11", () => {
         success: false,
         data: null,
         error: { code: "LAST_ACTIVE_ADMIN", message: "마지막 관리자입니다." },
-      })
+      }),
     );
 
     const caught = await apiFetch("/api/x").catch((error: unknown) => error);
@@ -81,13 +99,19 @@ describe("apiFetch — #11", () => {
   });
 
   it("204 는 본문 없이 끝난다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
 
-    await expect(apiFetch("/api/auth/logout", { method: "POST" })).resolves.toBeUndefined();
+    await expect(
+      apiFetch("/api/auth/logout", { method: "POST" }),
+    ).resolves.toBeUndefined();
   });
 
   it("JSON 이 아닌 오류 응답도 ApiClientError 로 바꾼다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("boom", { status: 500 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("boom", { status: 500 }),
+    );
 
     const caught = await apiFetch("/api/x").catch((error: unknown) => error);
 
@@ -100,7 +124,7 @@ describe("apiFetch — #11", () => {
         success: false,
         data: null,
         error: { code: "UNAUTHORIZED", message: "인증이 필요합니다." },
-      })
+      }),
     );
 
     // 래퍼가 라우터를 들면 테스트가 라우터에 묶인다. 화면이 정한다.
@@ -121,7 +145,10 @@ describe("오류 판별 — #44, #52", () => {
   });
 
   it("401 을 알아본다", () => {
-    const error = new ApiClientError(401, { code: "UNAUTHORIZED", message: "만료" });
+    const error = new ApiClientError(401, {
+      code: "UNAUTHORIZED",
+      message: "만료",
+    });
 
     expect(isUnauthorized(error)).toBe(true);
     expect(isPasswordChangeRequired(error)).toBe(false);

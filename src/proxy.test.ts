@@ -41,7 +41,9 @@ async function errorBody(response: Response) {
 
 beforeEach(() => {
   vi.mocked(verifyAccessToken).mockReset().mockReturnValue(PAYLOAD);
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(ACCOUNT as never);
+  vi.mocked(prisma.salesRep.findUnique)
+    .mockReset()
+    .mockResolvedValue(ACCOUNT as never);
 });
 
 describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
@@ -53,7 +55,9 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
   });
 
   it("Bearer 접두사가 없으면 401 이다", async () => {
-    const response = await proxy(request("/api/reports", { authorization: "signed.token" }));
+    const response = await proxy(
+      request("/api/reports", { authorization: "signed.token" }),
+    );
 
     expect(response.status).toBe(401);
     expect(verifyAccessToken).not.toHaveBeenCalled();
@@ -67,7 +71,9 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
     const response = await proxy(bearer("/api/reports"));
 
     expect(response.status).toBe(401);
-    expect((await errorBody(response))?.message).toBe("유효하지 않은 토큰입니다.");
+    expect((await errorBody(response))?.message).toBe(
+      "유효하지 않은 토큰입니다.",
+    );
   });
 
   it("검증 실패 응답에 내부 오류 메시지가 실리지 않는다", async () => {
@@ -96,9 +102,15 @@ describe("proxy — 유효 토큰", () => {
     const response = await proxy(bearer("/api/reports"));
 
     // parseAuthContext 가 읽는 두 헤더다. 이름이 바뀌면 인가 전체가 401 로 막힌다.
-    expect(response.headers.get("x-middleware-override-headers")).toContain("x-user-rep-id");
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe("1");
-    expect(response.headers.get("x-middleware-request-x-user-role")).toBe("SALES_REP");
+    expect(response.headers.get("x-middleware-override-headers")).toContain(
+      "x-user-rep-id",
+    );
+    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
+      "1",
+    );
+    expect(response.headers.get("x-middleware-request-x-user-role")).toBe(
+      "SALES_REP",
+    );
   });
 
   it("토큰 문자열만 떼어 검증에 넘긴다", async () => {
@@ -139,7 +151,10 @@ describe("proxy — 공개 경로", () => {
 
 describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
   beforeEach(() => {
-    vi.mocked(verifyAccessToken).mockReturnValue({ ...PAYLOAD, mustChangePassword: true });
+    vi.mocked(verifyAccessToken).mockReturnValue({
+      ...PAYLOAD,
+      mustChangePassword: true,
+    });
   });
 
   it.each(["/api/reports", "/api/sales-reps", "/api/customers"])(
@@ -149,8 +164,10 @@ describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
 
       // 화면이 변경 폼으로 보내주기를 기대하지 않고 서버에서 막는다.
       expect(response.status).toBe(403);
-      expect((await errorBody(response))?.code).toBe("PASSWORD_CHANGE_REQUIRED");
-    }
+      expect((await errorBody(response))?.code).toBe(
+        "PASSWORD_CHANGE_REQUIRED",
+      );
+    },
   );
 
   it("비밀번호 변경 경로는 통과시킨다", async () => {
@@ -165,7 +182,9 @@ describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
   it("통과하는 경로에는 인증 헤더를 그대로 심는다", async () => {
     const response = await proxy(bearer("/api/me/password"));
 
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe("1");
+    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
+      "1",
+    );
   });
 
   it("플래그가 내려가면 다시 통과한다", async () => {
@@ -219,7 +238,10 @@ describe("proxy — 토큰 무효화 (#52)", () => {
   });
 
   it("repId 가 숫자가 아닌 토큰은 401 이다", async () => {
-    vi.mocked(verifyAccessToken).mockReturnValue({ ...PAYLOAD, repId: "not-a-number" });
+    vi.mocked(verifyAccessToken).mockReturnValue({
+      ...PAYLOAD,
+      repId: "not-a-number",
+    });
 
     // 서명이 유효해도 payload 형식까지 보장되지는 않는다. BigInt 변환이
     // 예외를 내면 500 이 된다.

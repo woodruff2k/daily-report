@@ -45,10 +45,15 @@ function prismaError(code: string, target?: string[]) {
 beforeEach(() => {
   vi.mocked(prisma.$transaction)
     .mockReset()
-    .mockImplementation(((fn: (tx: unknown) => unknown) => fn(prisma)) as never);
-  vi.mocked(prisma.$executeRaw).mockReset().mockResolvedValue(1 as never);
+    .mockImplementation(((fn: (tx: unknown) => unknown) =>
+      fn(prisma)) as never);
+  vi.mocked(prisma.$executeRaw)
+    .mockReset()
+    .mockResolvedValue(1 as never);
   vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
+  vi.mocked(prisma.salesRep.findUnique)
+    .mockReset()
+    .mockResolvedValue(MANAGER_REP);
   vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue(REP);
 });
 
@@ -60,7 +65,9 @@ describe("GET /api/sales-reps/{repId}", () => {
 
     expect(response.status).toBe(200);
     expect(body.data).toMatchObject({ repId: 1, empNo: "S2026001" });
-    expect(prisma.salesRep.findUnique).toHaveBeenCalledWith({ where: { repId: 1n } });
+    expect(prisma.salesRep.findUnique).toHaveBeenCalledWith({
+      where: { repId: 1n },
+    });
   });
 
   it("응답에 비밀번호 해시가 들어가지 않는다", async () => {
@@ -98,7 +105,7 @@ describe("PUT /api/sales-reps/{repId}", () => {
   it("관리자는 전체 필드를 수정한다", async () => {
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: UPDATE_BODY }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(200);
@@ -110,8 +117,11 @@ describe("PUT /api/sales-reps/{repId}", () => {
 
   it("비밀번호는 이 경로로 바뀌지 않는다", async () => {
     await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, password: "longenough1" } }),
-      params("1")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, password: "longenough1" },
+      }),
+      params("1"),
     );
 
     const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
@@ -122,7 +132,7 @@ describe("PUT /api/sales-reps/{repId}", () => {
   it("자기 자신을 상급자로 지정하면 400이다", async () => {
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 1 } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(400);
@@ -137,12 +147,12 @@ describe("PUT /api/sales-reps/{repId}", () => {
       where: { repId: bigint };
     }) =>
       Promise.resolve(
-        args.where.repId === 2n ? null : { ...MANAGER_REP, managerId: null }
+        args.where.repId === 2n ? null : { ...MANAGER_REP, managerId: null },
       )) as never);
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: UPDATE_BODY }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(400);
@@ -154,18 +164,20 @@ describe("PUT /api/sales-reps/{repId}", () => {
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: UPDATE_BODY }),
-      params("99")
+      params("99"),
     );
 
     expect(response.status).toBe(404);
   });
 
   it("이메일이 다른 사원과 겹치면 409다", async () => {
-    vi.mocked(prisma.salesRep.update).mockRejectedValue(prismaError("P2002", ["email"]));
+    vi.mocked(prisma.salesRep.update).mockRejectedValue(
+      prismaError("P2002", ["email"]),
+    );
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: UPDATE_BODY }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(409);
@@ -175,7 +187,7 @@ describe("PUT /api/sales-reps/{repId}", () => {
   it("필수 항목이 빠지면 400이다", async () => {
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: { name: "홍길동" } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(400);
@@ -185,7 +197,7 @@ describe("PUT /api/sales-reps/{repId}", () => {
   it("영업사원이 호출하면 403이다 (TC-SEC-03)", async () => {
     const response = await PUT(
       asSalesRep(URL, { method: "PUT", body: UPDATE_BODY }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(403);
@@ -201,7 +213,10 @@ describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌�
     const body: Record<string, unknown> = { ...UPDATE_BODY };
     delete body[field];
 
-    const response = await PUT(asAdmin(URL, { method: "PUT", body }), params("1"));
+    const response = await PUT(
+      asAdmin(URL, { method: "PUT", body }),
+      params("1"),
+    );
 
     // 기본값이 적용되면 MANAGER 가 SALES_REP 로 강등되거나
     // 비활성 계정이 다시 활성화된다. 부서명만 고치려던 요청이 권한을 바꾼다.
@@ -211,8 +226,11 @@ describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌�
 
   it("역할을 명시하면 그 값으로 바꾼다", async () => {
     await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, role: "MANAGER" } }),
-      params("1")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, role: "MANAGER" },
+      }),
+      params("1"),
     );
 
     expect(prisma.salesRep.update).toHaveBeenCalledWith({
@@ -224,7 +242,10 @@ describe("PUT /api/sales-reps/{repId} — 생략된 필드가 조용히 바뀌�
 
 describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
   /** 상급자 존재 확인과 현재 상태 조회가 같은 findUnique 를 쓴다. */
-  function currentIs(role: "SALES_REP" | "MANAGER" | "ADMIN", status: "ACTIVE" | "INACTIVE") {
+  function currentIs(
+    role: "SALES_REP" | "MANAGER" | "ADMIN",
+    status: "ACTIVE" | "INACTIVE",
+  ) {
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue({
       ...MANAGER_REP,
       role,
@@ -236,8 +257,11 @@ describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
     currentIs("MANAGER", "ACTIVE");
 
     await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined, role: "SALES_REP" } }),
-      params("1")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined, role: "SALES_REP" },
+      }),
+      params("1"),
     );
 
     // 토큰에 역할이 담겨 있어, 버전을 올리지 않으면 강등된 사람이 만료까지
@@ -254,7 +278,7 @@ describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
         method: "PUT",
         body: { ...UPDATE_BODY, managerId: undefined, status: "INACTIVE" },
       }),
-      params("1")
+      params("1"),
     );
 
     const [{ data }] = vi.mocked(prisma.salesRep.update).mock.calls[0];
@@ -265,8 +289,11 @@ describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
     currentIs("SALES_REP", "ACTIVE");
 
     await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
-      params("1")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined },
+      }),
+      params("1"),
     );
 
     // 부서명만 고치는 요청이 세션을 끊으면 안 된다.
@@ -278,8 +305,11 @@ describe("PUT /api/sales-reps/{repId} — 토큰 무효화 (#52)", () => {
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(null);
 
     const response = await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
-      params("99")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined },
+      }),
+      params("99"),
     );
 
     expect(response.status).toBe(404);
@@ -301,7 +331,7 @@ describe("PUT /api/sales-reps/{repId} — #49 후속 수정", () => {
         method: "PUT",
         body: { ...UPDATE_BODY, managerId: undefined, role: "SALES_REP" },
       }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(409);
@@ -320,7 +350,7 @@ describe("PUT /api/sales-reps/{repId} — #49 후속 수정", () => {
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 2 } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(200);
@@ -333,28 +363,34 @@ describe("PUT /api/sales-reps/{repId} — #49 후속 수정", () => {
       Promise.resolve(
         args.where.repId === 7n
           ? { ...MANAGER_REP, role: "SALES_REP", status: "ACTIVE" }
-          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n }
+          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n },
       )) as never);
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 7 } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(400);
-    expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
+    expect((await readBody(response)).error?.code).toBe(
+      "MANAGER_ROLE_REQUIRED",
+    );
   });
 });
 
 describe("PUT /api/sales-reps/{repId} — 트랜잭션·잠금 (#55)", () => {
   it("쓰기 전에 잠금을 건다", async () => {
     await PUT(
-      asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: undefined } }),
-      params("1")
+      asAdmin(URL, {
+        method: "PUT",
+        body: { ...UPDATE_BODY, managerId: undefined },
+      }),
+      params("1"),
     );
 
     const lockOrder = vi.mocked(prisma.$executeRaw).mock.invocationCallOrder[0];
-    const updateOrder = vi.mocked(prisma.salesRep.update).mock.invocationCallOrder[0];
+    const updateOrder = vi.mocked(prisma.salesRep.update).mock
+      .invocationCallOrder[0];
     expect(lockOrder).toBeLessThan(updateOrder);
   });
 
@@ -366,12 +402,12 @@ describe("PUT /api/sales-reps/{repId} — 트랜잭션·잠금 (#55)", () => {
       Promise.resolve(
         args.where.repId === 7n
           ? { ...MANAGER_REP, role: "SALES_REP" }
-          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n }
+          : { ...MANAGER_REP, role: "SALES_REP", managerId: 2n },
       )) as never);
 
     const response = await PUT(
       asAdmin(URL, { method: "PUT", body: { ...UPDATE_BODY, managerId: 7 } }),
-      params("1")
+      params("1"),
     );
 
     expect(response.status).toBe(400);

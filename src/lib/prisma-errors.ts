@@ -45,10 +45,16 @@ export function mapSalesRepWriteError(error: unknown): unknown {
 
   if (fields !== null) {
     if (fields.includes("empNo")) {
-      return new ConflictError("DUPLICATE_EMP_NO", "이미 사용 중인 사번입니다.");
+      return new ConflictError(
+        "DUPLICATE_EMP_NO",
+        "이미 사용 중인 사번입니다.",
+      );
     }
     if (fields.includes("email")) {
-      return new ConflictError("DUPLICATE_EMAIL", "이미 사용 중인 이메일입니다.");
+      return new ConflictError(
+        "DUPLICATE_EMAIL",
+        "이미 사용 중인 이메일입니다.",
+      );
     }
     return new ConflictError("DUPLICATE_VALUE", "이미 사용 중인 값입니다.");
   }

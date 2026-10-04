@@ -28,7 +28,9 @@ export class ApiClientError extends Error {
 
 /** 임시 비밀번호를 바꿔야 해서 막힌 상태인지. (#44) */
 export function isPasswordChangeRequired(error: unknown): boolean {
-  return error instanceof ApiClientError && error.code === "PASSWORD_CHANGE_REQUIRED";
+  return (
+    error instanceof ApiClientError && error.code === "PASSWORD_CHANGE_REQUIRED"
+  );
 }
 
 /** 토큰이 없거나 무효화된 상태인지. (#52) */
@@ -45,7 +47,7 @@ interface RequestOptions {
 
 export async function apiFetch<T>(
   path: string,
-  { method = "GET", body, anonymous = false }: RequestOptions = {}
+  { method = "GET", body, anonymous = false }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
 
@@ -79,7 +81,10 @@ export async function apiFetch<T>(
   if (!response.ok || !payload?.success) {
     throw new ApiClientError(
       response.status,
-      payload?.error ?? { code: "UNKNOWN", message: "요청을 처리할 수 없습니다." }
+      payload?.error ?? {
+        code: "UNKNOWN",
+        message: "요청을 처리할 수 없습니다.",
+      },
     );
   }
 

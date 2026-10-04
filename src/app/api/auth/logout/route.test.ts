@@ -22,7 +22,9 @@ function withoutAuth() {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue({} as never);
+  vi.mocked(prisma.salesRep.update)
+    .mockReset()
+    .mockResolvedValue({} as never);
 });
 
 describe("POST /api/auth/logout — TC-AUTH-05", () => {

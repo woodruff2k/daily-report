@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/client/api-client";
-import { clearSession, getStoredRep, type StoredRep } from "@/lib/client/auth-storage";
+import {
+  clearSession,
+  getStoredRep,
+  type StoredRep,
+} from "@/lib/client/auth-storage";
 
 /**
  * 공통 헤더. 로그인한 사용자와 로그아웃을 둔다. (이슈 #17)
@@ -35,7 +39,9 @@ export default function AppHeader() {
 
   async function handleLogout() {
     // 서버가 토큰을 무효화한다(#52). 실패해도 로컬 세션은 지운다.
-    await apiFetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    await apiFetch("/api/auth/logout", { method: "POST" }).catch(
+      () => undefined,
+    );
     clearSession();
     router.replace("/login");
   }
@@ -46,14 +52,21 @@ export default function AppHeader() {
         <Link href="/reports" className="font-semibold">
           영업 일일 보고
         </Link>
-        {rep?.role === "ADMIN" ? <Link href="/sales-reps">영업 마스터</Link> : null}
+        {rep?.role === "ADMIN" ? (
+          <Link href="/sales-reps">영업 마스터</Link>
+        ) : null}
         {rep?.role === "MANAGER" ? <Link href="/team">팀 보고</Link> : null}
         <Link href="/customers">고객</Link>
       </nav>
 
       <div className="flex items-center gap-3 text-sm">
         {rep === null ? null : <span>{rep.name}</span>}
-        <Button type="button" variant="ghost" size="sm" onClick={() => void handleLogout()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleLogout()}
+        >
           로그아웃
         </Button>
       </div>

@@ -7,7 +7,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/password", () => ({
-  hashPassword: vi.fn((password: string) => Promise.resolve(`hashed:${password}`)),
+  hashPassword: vi.fn((password: string) =>
+    Promise.resolve(`hashed:${password}`),
+  ),
   verifyPassword: vi.fn(),
 }));
 
@@ -38,13 +40,17 @@ function asSelf(body: unknown) {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue({
-    repId: ACTIVE_REP.repId,
-    name: ACTIVE_REP.name,
-    role: ACTIVE_REP.role,
-    passwordHash: ACTIVE_REP.passwordHash,
-  } as never);
-  vi.mocked(prisma.salesRep.update).mockReset().mockResolvedValue({ tokenVersion: 1 } as never);
+  vi.mocked(prisma.salesRep.findUnique)
+    .mockReset()
+    .mockResolvedValue({
+      repId: ACTIVE_REP.repId,
+      name: ACTIVE_REP.name,
+      role: ACTIVE_REP.role,
+      passwordHash: ACTIVE_REP.passwordHash,
+    } as never);
+  vi.mocked(prisma.salesRep.update)
+    .mockReset()
+    .mockResolvedValue({ tokenVersion: 1 } as never);
   vi.mocked(verifyPassword).mockReset().mockResolvedValue(true);
   vi.mocked(hashPassword).mockClear();
   vi.mocked(signAccessToken).mockClear();
@@ -52,7 +58,9 @@ beforeEach(() => {
 
 describe("PUT /api/me/password — 본인 변경 (#44)", () => {
   it("현재 비밀번호가 맞으면 새 해시로 바꾼다", async () => {
-    const response = await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
+    const response = await PUT(
+      asSelf({ currentPassword: CURRENT, newPassword: NEW }),
+    );
 
     expect(response.status).toBe(200);
     expect(prisma.salesRep.update).toHaveBeenCalledWith({
@@ -74,26 +82,34 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
   });
 
   it("새 토큰을 돌려준다", async () => {
-    const response = await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
+    const response = await PUT(
+      asSelf({ currentPassword: CURRENT, newPassword: NEW }),
+    );
 
     // 기존 토큰에는 mustChangePassword 가 true 로 박혀 있어 그대로 쓰면 계속 막힌다.
-    expect((await readBody(response)).data).toEqual({ accessToken: "fresh.access.token" });
+    expect((await readBody(response)).data).toEqual({
+      accessToken: "fresh.access.token",
+    });
     expect(signAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({ mustChangePassword: false })
+      expect.objectContaining({ mustChangePassword: false }),
     );
   });
 
   it("현재 비밀번호가 틀리면 401 이다", async () => {
     vi.mocked(verifyPassword).mockResolvedValue(false);
 
-    const response = await PUT(asSelf({ currentPassword: "wrong-password", newPassword: NEW }));
+    const response = await PUT(
+      asSelf({ currentPassword: "wrong-password", newPassword: NEW }),
+    );
 
     expect(response.status).toBe(401);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
   });
 
   it("새 비밀번호가 기존과 같으면 400 이다", async () => {
-    const response = await PUT(asSelf({ currentPassword: CURRENT, newPassword: CURRENT }));
+    const response = await PUT(
+      asSelf({ currentPassword: CURRENT, newPassword: CURRENT }),
+    );
 
     expect(response.status).toBe(400);
     expect(prisma.salesRep.update).not.toHaveBeenCalled();
@@ -103,7 +119,10 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
     ["본문 없음", undefined],
     ["현재 비밀번호 누락", { newPassword: NEW }],
     ["새 비밀번호 누락", { currentPassword: CURRENT }],
-    ["새 비밀번호 12자 미만", { currentPassword: CURRENT, newPassword: "short-11ch" }],
+    [
+      "새 비밀번호 12자 미만",
+      { currentPassword: CURRENT, newPassword: "short-11ch" },
+    ],
   ])("잘못된 요청(%s)은 400 이다", async (_label, body) => {
     const response = await PUT(asSelf(body));
 
@@ -112,7 +131,9 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
   });
 
   it("인증 헤더가 없으면 401 이다", async () => {
-    const response = await PUT(request({ currentPassword: CURRENT, newPassword: NEW }));
+    const response = await PUT(
+      request({ currentPassword: CURRENT, newPassword: NEW }),
+    );
 
     expect(response.status).toBe(401);
     expect(prisma.salesRep.findUnique).not.toHaveBeenCalled();
@@ -121,11 +142,16 @@ describe("PUT /api/me/password — 본인 변경 (#44)", () => {
   it("토큰의 계정이 사라졌으면 404 다", async () => {
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(null);
 
-    expect((await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }))).status).toBe(404);
+    expect(
+      (await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW })))
+        .status,
+    ).toBe(404);
   });
 
   it("응답에 비밀번호나 해시가 실리지 않는다", async () => {
-    const response = await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
+    const response = await PUT(
+      asSelf({ currentPassword: CURRENT, newPassword: NEW }),
+    );
 
     const body = JSON.stringify(await readBody(response));
     expect(body).not.toContain(NEW);
@@ -146,7 +172,7 @@ describe("PUT /api/me/password — 기존 토큰 무효화 (#52)", () => {
     await PUT(asSelf({ currentPassword: CURRENT, newPassword: NEW }));
 
     expect(signAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({ tokenVersion: 1 })
+      expect.objectContaining({ tokenVersion: 1 }),
     );
   });
 });

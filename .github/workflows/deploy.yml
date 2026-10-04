@@ -36,7 +36,7 @@ jobs:
     needs: lint-and-test
     permissions:
       contents: read
-      id-token: write   # Workload Identity Federation 필수
+      id-token: write # Workload Identity Federation 필수
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
             --region ${{ env.REGION }} \
             --wait \
             --project ${{ env.PROJECT_ID }} \
-        continue-on-error: true  # 마이그레이션 Job이 없으면 스킵
+        continue-on-error: true # 마이그레이션 Job이 없으면 스킵
 
       - name: Deploy to Cloud Run
         run: |

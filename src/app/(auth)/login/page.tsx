@@ -3,10 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/api-client";
-import { getAccessToken, saveSession, type StoredRep } from "@/lib/client/auth-storage";
+import {
+  getAccessToken,
+  saveSession,
+  type StoredRep,
+} from "@/lib/client/auth-storage";
 import { loginRequestSchema } from "@/schemas/auth";
 
 interface LoginResponse {
@@ -75,7 +84,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <form onSubmit={handleSubmit} className="w-full max-w-sm" noValidate>
-        <h1 className="mb-6 text-center text-xl font-semibold">영업 일일 보고 시스템</h1>
+        <h1 className="mb-6 text-center text-xl font-semibold">
+          영업 일일 보고 시스템
+        </h1>
 
         <FieldGroup>
           <Field>
@@ -101,7 +112,9 @@ export default function LoginPage() {
             />
           </Field>
 
-          {error === null ? null : <FieldError role="alert">{error}</FieldError>}
+          {error === null ? null : (
+            <FieldError role="alert">{error}</FieldError>
+          )}
 
           <Button type="submit" disabled={submitting}>
             {submitting ? "로그인 중…" : "로그인"}

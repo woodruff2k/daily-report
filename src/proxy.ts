@@ -18,7 +18,7 @@ const PASSWORD_CHANGE_ALLOWED_PATHS = ["/api/auth/logout", "/api/me/password"];
 function unauthorized(message: string) {
   return NextResponse.json(
     { success: false, data: null, error: { code: "UNAUTHORIZED", message } },
-    { status: 401 }
+    { status: 401 },
   );
 }
 
@@ -63,11 +63,18 @@ export async function proxy(request: NextRequest) {
     select: { tokenVersion: true, status: true },
   });
 
-  if (!rep || rep.status !== "ACTIVE" || rep.tokenVersion !== payload.tokenVersion) {
+  if (
+    !rep ||
+    rep.status !== "ACTIVE" ||
+    rep.tokenVersion !== payload.tokenVersion
+  ) {
     return unauthorized("유효하지 않은 토큰입니다.");
   }
 
-  if (payload.mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.includes(pathname)) {
+  if (
+    payload.mustChangePassword &&
+    !PASSWORD_CHANGE_ALLOWED_PATHS.includes(pathname)
+  ) {
     return NextResponse.json(
       {
         success: false,
@@ -77,7 +84,7 @@ export async function proxy(request: NextRequest) {
           message: "임시 비밀번호를 변경한 뒤 이용할 수 있습니다.",
         },
       },
-      { status: 403 }
+      { status: 403 },
     );
   }
 

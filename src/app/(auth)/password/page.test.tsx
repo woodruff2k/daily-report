@@ -27,7 +27,7 @@ function changeSucceeds() {
       success: true,
       data: { accessToken: "fresh.token" },
       error: null,
-    })
+    }),
   );
 }
 
@@ -44,7 +44,7 @@ beforeEach(() => {
   window.localStorage.setItem("daily-report.accessToken", "temporary.token");
   window.localStorage.setItem(
     "daily-report.rep",
-    JSON.stringify({ repId: 5, name: "신규사원", role: "SALES_REP" })
+    JSON.stringify({ repId: 5, name: "신규사원", role: "SALES_REP" }),
   );
   replace.mockClear();
 });
@@ -90,7 +90,7 @@ describe("SCR-110 비밀번호 변경 — #57", () => {
     await fillAndSubmit(CURRENT, NEW, "different-password-1");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "새 비밀번호가 일치하지 않습니다."
+      "새 비밀번호가 일치하지 않습니다.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -110,15 +110,18 @@ describe("SCR-110 비밀번호 변경 — #57", () => {
       jsonResponse(401, {
         success: false,
         data: null,
-        error: { code: "UNAUTHORIZED", message: "현재 비밀번호가 올바르지 않습니다." },
-      })
+        error: {
+          code: "UNAUTHORIZED",
+          message: "현재 비밀번호가 올바르지 않습니다.",
+        },
+      }),
     );
     render(<PasswordChangePage />);
 
     await fillAndSubmit("wrong-password-x", NEW, NEW);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "현재 비밀번호가 올바르지 않습니다."
+      "현재 비밀번호가 올바르지 않습니다.",
     );
     expect(getAccessToken()).toBe("temporary.token");
     expect(replace).not.toHaveBeenCalled();
@@ -129,14 +132,19 @@ describe("SCR-110 비밀번호 변경 — #57", () => {
       jsonResponse(400, {
         success: false,
         data: null,
-        error: { code: "INVALID_REQUEST", message: "새 비밀번호가 기존 비밀번호와 같습니다." },
-      })
+        error: {
+          code: "INVALID_REQUEST",
+          message: "새 비밀번호가 기존 비밀번호와 같습니다.",
+        },
+      }),
     );
     render(<PasswordChangePage />);
 
     await fillAndSubmit(CURRENT, CURRENT, CURRENT);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("기존 비밀번호와 같습니다");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "기존 비밀번호와 같습니다",
+    );
   });
 
   it("토큰이 없으면 로그인으로 보낸다", async () => {

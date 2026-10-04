@@ -29,7 +29,7 @@ function loginSucceeds(mustChangePassword = false) {
       success: true,
       data: { accessToken: "issued.token", rep: REP, mustChangePassword },
       error: null,
-    })
+    }),
   );
 }
 
@@ -61,7 +61,10 @@ describe("SCR-100 로그인 — #11", () => {
   it("비밀번호 입력은 가려진다", () => {
     render(<LoginPage />);
 
-    expect(screen.getByLabelText("비밀번호")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("비밀번호")).toHaveAttribute(
+      "type",
+      "password",
+    );
   });
 
   it("관리자는 영업 마스터 목록으로 보낸다 (TC-AUTH-01)", async () => {
@@ -86,7 +89,7 @@ describe("SCR-100 로그인 — #11", () => {
           mustChangePassword: false,
         },
         error: null,
-      })
+      }),
     );
     render(<LoginPage />);
 
@@ -109,15 +112,18 @@ describe("SCR-100 로그인 — #11", () => {
       jsonResponse(401, {
         success: false,
         data: null,
-        error: { code: "UNAUTHORIZED", message: "아이디 또는 비밀번호가 올바르지 않습니다." },
-      })
+        error: {
+          code: "UNAUTHORIZED",
+          message: "아이디 또는 비밀번호가 올바르지 않습니다.",
+        },
+      }),
     );
     render(<LoginPage />);
 
     await fillAndSubmit("test-admin@example.com", "wrong-password");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "이메일/사번 또는 비밀번호가 올바르지 않습니다."
+      "이메일/사번 또는 비밀번호가 올바르지 않습니다.",
     );
     expect(replace).not.toHaveBeenCalled();
     expect(getAccessToken()).toBeNull();
@@ -128,8 +134,11 @@ describe("SCR-100 로그인 — #11", () => {
       jsonResponse(401, {
         success: false,
         data: null,
-        error: { code: "UNAUTHORIZED", message: "아이디 또는 비밀번호가 올바르지 않습니다." },
-      })
+        error: {
+          code: "UNAUTHORIZED",
+          message: "아이디 또는 비밀번호가 올바르지 않습니다.",
+        },
+      }),
     );
     render(<LoginPage />);
 
@@ -145,7 +154,9 @@ describe("SCR-100 로그인 — #11", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     render(<LoginPage />);
 
-    await userEvent.setup().click(screen.getByRole("button", { name: "로그인" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "로그인" }));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -168,6 +179,8 @@ describe("SCR-100 로그인 — #11", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0];
-    expect((init?.headers as Record<string, string>).authorization).toBeUndefined();
+    expect(
+      (init?.headers as Record<string, string>).authorization,
+    ).toBeUndefined();
   });
 });

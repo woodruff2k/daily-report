@@ -107,7 +107,10 @@ export function assertManagerOf(auth: AuthContext, target: TargetRep): void {
  * 소유자 본인 또는 직속 상급자만 허용한다.
  * 타인의 보고 조회를 막는 IDOR 방어에 쓴다. (TC-SEC-01)
  */
-export function assertOwnerOrManager(auth: AuthContext, target: TargetRep): void {
+export function assertOwnerOrManager(
+  auth: AuthContext,
+  target: TargetRep,
+): void {
   if (isOwner(auth, target.repId) || isManagerOf(auth, target)) {
     return;
   }
@@ -125,7 +128,10 @@ export function assertRole(auth: AuthContext, requiredRole: Role): void {
 }
 
 /** 나열한 역할 중 하나면 허용한다. */
-export function assertAnyRole(auth: AuthContext, allowedRoles: readonly Role[]): void {
+export function assertAnyRole(
+  auth: AuthContext,
+  allowedRoles: readonly Role[],
+): void {
   if (!allowedRoles.includes(auth.role)) {
     throw forbidden("이 작업을 수행할 권한이 없습니다.");
   }
@@ -140,7 +146,7 @@ export function assertAnyRole(auth: AuthContext, allowedRoles: readonly Role[]):
 export function assertTeamScope(
   auth: AuthContext,
   requestedRepIds: readonly bigint[],
-  subordinateRepIds: readonly bigint[]
+  subordinateRepIds: readonly bigint[],
 ): bigint[] {
   if (auth.role !== "MANAGER") {
     throw forbidden("팀 보고를 조회할 권한이 없습니다.");
@@ -186,10 +192,12 @@ export interface CommentableReport {
 export function assertCanComment(
   auth: AuthContext,
   report: CommentableReport,
-  parentCommentId: bigint | null
+  parentCommentId: bigint | null,
 ): void {
   const isReply = parentCommentId !== null;
-  const allowed = isManagerOf(auth, report.author) || (isOwner(auth, report.author.repId) && isReply);
+  const allowed =
+    isManagerOf(auth, report.author) ||
+    (isOwner(auth, report.author.repId) && isReply);
 
   if (!allowed) {
     throw forbidden("이 보고에 댓글을 작성할 권한이 없습니다.");
@@ -198,7 +206,7 @@ export function assertCanComment(
   if (report.status !== "SUBMITTED") {
     throw new ConflictError(
       "REPORT_NOT_SUBMITTED",
-      "제출되지 않은 보고에는 댓글을 작성할 수 없습니다."
+      "제출되지 않은 보고에는 댓글을 작성할 수 없습니다.",
     );
   }
 }
@@ -208,7 +216,10 @@ export function assertCanComment(
  *
  * 상급자여도 타인 댓글은 손대지 못한다.
  */
-export function assertCommentAuthor(auth: AuthContext, commenterId: bigint): void {
+export function assertCommentAuthor(
+  auth: AuthContext,
+  commenterId: bigint,
+): void {
   if (!isOwner(auth, commenterId)) {
     throw forbidden("본인이 작성한 댓글만 수정·삭제할 수 있습니다.");
   }
@@ -228,10 +239,16 @@ export interface EditableReport {
  * 구분해 막는다. 권한 부족과 상태 충돌은 다른 사건이므로 타입을 나누고,
  * 둘 다 HttpError라서 라우트에서는 한 번에 받는다.
  */
-export function assertReportEditable(auth: AuthContext, report: EditableReport): void {
+export function assertReportEditable(
+  auth: AuthContext,
+  report: EditableReport,
+): void {
   assertOwner(auth, report.repId);
 
   if (report.status !== "DRAFT") {
-    throw new ConflictError("REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다.");
+    throw new ConflictError(
+      "REPORT_LOCKED",
+      "제출된 보고는 수정할 수 없습니다.",
+    );
   }
 }

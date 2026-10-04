@@ -23,7 +23,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/password", () => ({
-  hashPassword: vi.fn((password: string) => Promise.resolve(`hashed:${password}`)),
+  hashPassword: vi.fn((password: string) =>
+    Promise.resolve(`hashed:${password}`),
+  ),
   generateTemporaryPassword: vi.fn(() => "generated-temp-password-xyz"),
 }));
 
@@ -48,10 +50,14 @@ function prismaError(code: string, target?: string[]) {
 }
 
 beforeEach(() => {
-  vi.mocked(prisma.salesRep.findMany).mockReset().mockResolvedValue([REP_WITH_MANAGER]);
+  vi.mocked(prisma.salesRep.findMany)
+    .mockReset()
+    .mockResolvedValue([REP_WITH_MANAGER]);
   vi.mocked(prisma.salesRep.count).mockReset().mockResolvedValue(1);
   vi.mocked(prisma.salesRep.create).mockReset().mockResolvedValue(REP);
-  vi.mocked(prisma.salesRep.findUnique).mockReset().mockResolvedValue(MANAGER_REP);
+  vi.mocked(prisma.salesRep.findUnique)
+    .mockReset()
+    .mockResolvedValue(MANAGER_REP);
   vi.mocked(hashPassword).mockClear();
   vi.mocked(generateTemporaryPassword).mockClear();
 });
@@ -84,13 +90,15 @@ describe("GET /api/sales-reps", () => {
 
     // SCR-500 의 목록 항목에 이메일이 없다. 매 건 실어 보낼 이유가 없다. (NFR-04)
     expect(JSON.stringify(body)).not.toContain(REP.email);
-    const [first] = (body.data as { content: Record<string, unknown>[] }).content;
+    const [first] = (body.data as { content: Record<string, unknown>[] })
+      .content;
     expect(first).not.toHaveProperty("email");
   });
 
   it("목록에 화면이 쓰는 항목은 담는다", async () => {
     const body = await readBody(await GET(asAdmin(URL)));
-    const [first] = (body.data as { content: Record<string, unknown>[] }).content;
+    const [first] = (body.data as { content: Record<string, unknown>[] })
+      .content;
 
     expect(first).toMatchObject({
       repId: 1,
@@ -118,7 +126,7 @@ describe("GET /api/sales-reps", () => {
     await GET(asAdmin(`${URL}?page=2&size=5`));
 
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 10, take: 5 })
+      expect.objectContaining({ skip: 10, take: 5 }),
     );
   });
 
@@ -133,7 +141,7 @@ describe("GET /api/sales-reps", () => {
             { empNo: { contains: "홍길", mode: "insensitive" } },
           ],
         },
-      })
+      }),
     );
   });
 
@@ -141,7 +149,7 @@ describe("GET /api/sales-reps", () => {
     await GET(asAdmin(`${URL}?status=INACTIVE`));
 
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: "INACTIVE" } })
+      expect.objectContaining({ where: { status: "INACTIVE" } }),
     );
   });
 
@@ -152,21 +160,29 @@ describe("GET /api/sales-reps", () => {
 
       expect(response.status).toBe(400);
       expect(prisma.salesRep.findMany).not.toHaveBeenCalled();
-    }
+    },
   );
 });
 
 describe("POST /api/sales-reps — TC-REP-01", () => {
   it("필수 항목을 넘기면 201로 생성한다", async () => {
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
     const body = await readBody(response);
 
     expect(response.status).toBe(201);
-    expect(body.data).toMatchObject({ repId: 1, empNo: "S2026001", status: "ACTIVE" });
+    expect(body.data).toMatchObject({
+      repId: 1,
+      empNo: "S2026001",
+      status: "ACTIVE",
+    });
   });
 
   it("응답에 비밀번호 해시가 들어가지 않는다", async () => {
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(JSON.stringify(await readBody(response))).not.toContain("$2a$");
   });
@@ -177,7 +193,7 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
     expect(prisma.salesRep.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ managerId: 2n }),
-      })
+      }),
     );
   });
 
@@ -186,14 +202,18 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
     await POST(asAdmin(URL, { method: "POST", body: withoutManager }));
 
     expect(prisma.salesRep.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ managerId: null }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ managerId: null }),
+      }),
     );
   });
 
   it("존재하지 않는 상급자를 지정하면 400이다", async () => {
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(null);
 
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(response.status).toBe(400);
     expect((await readBody(response)).error?.code).toBe("MANAGER_NOT_FOUND");
@@ -201,18 +221,26 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
   });
 
   it("사번이 중복이면 409다 (TC-REP-02)", async () => {
-    vi.mocked(prisma.salesRep.create).mockRejectedValue(prismaError("P2002", ["empNo"]));
+    vi.mocked(prisma.salesRep.create).mockRejectedValue(
+      prismaError("P2002", ["empNo"]),
+    );
 
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(response.status).toBe(409);
     expect((await readBody(response)).error?.code).toBe("DUPLICATE_EMP_NO");
   });
 
   it("이메일이 중복이면 409다 (TC-REP-02)", async () => {
-    vi.mocked(prisma.salesRep.create).mockRejectedValue(prismaError("P2002", ["email"]));
+    vi.mocked(prisma.salesRep.create).mockRejectedValue(
+      prismaError("P2002", ["email"]),
+    );
 
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(response.status).toBe(409);
     expect((await readBody(response)).error?.code).toBe("DUPLICATE_EMAIL");
@@ -220,7 +248,10 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
 
   it("비밀번호를 받으면 해시해서 저장한다", async () => {
     await POST(
-      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "longenough-123" } })
+      asAdmin(URL, {
+        method: "POST",
+        body: { ...CREATE_BODY, password: "longenough-123" },
+      }),
     );
 
     expect(hashPassword).toHaveBeenCalledWith("longenough-123");
@@ -245,7 +276,9 @@ describe("POST /api/sales-reps — TC-REP-01", () => {
   });
 
   it("영업사원이 호출하면 403이다 (TC-SEC-03)", async () => {
-    const response = await POST(asSalesRep(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asSalesRep(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(response.status).toBe(403);
     expect(prisma.salesRep.create).not.toHaveBeenCalled();
@@ -257,21 +290,31 @@ describe("POST /api/sales-reps — role 설정 (#48)", () => {
     await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
 
     expect(prisma.salesRep.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: "SALES_REP" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ role: "SALES_REP" }),
+      }),
     );
   });
 
-  it.each(["MANAGER", "ADMIN"])("관리자는 %s 계정을 만들 수 있다", async (role) => {
-    await POST(asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, role } }));
+  it.each(["MANAGER", "ADMIN"])(
+    "관리자는 %s 계정을 만들 수 있다",
+    async (role) => {
+      await POST(
+        asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, role } }),
+      );
 
-    expect(prisma.salesRep.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role }) })
-    );
-  });
+      expect(prisma.salesRep.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ role }) }),
+      );
+    },
+  );
 
   it("정의되지 않은 역할은 400 이다", async () => {
     const response = await POST(
-      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, role: "SUPERUSER" } })
+      asAdmin(URL, {
+        method: "POST",
+        body: { ...CREATE_BODY, role: "SUPERUSER" },
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -280,7 +323,10 @@ describe("POST /api/sales-reps — role 설정 (#48)", () => {
 
   it("영업사원은 ADMIN 계정을 만들 수 없다 (권한 상승 방어)", async () => {
     const response = await POST(
-      asSalesRep(URL, { method: "POST", body: { ...CREATE_BODY, role: "ADMIN" } })
+      asSalesRep(URL, {
+        method: "POST",
+        body: { ...CREATE_BODY, role: "ADMIN" },
+      }),
     );
 
     expect(response.status).toBe(403);
@@ -288,27 +334,37 @@ describe("POST /api/sales-reps — role 설정 (#48)", () => {
   });
 
   it("응답에 역할을 담는다", async () => {
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     // 관리 화면이 역할을 보여줘야 수정할 수 있다.
-    expect((await readBody(response)).data).toMatchObject({ role: "SALES_REP" });
+    expect((await readBody(response)).data).toMatchObject({
+      role: "SALES_REP",
+    });
   });
 
   it("상급자의 역할이 MANAGER 가 아니면 400 이다", async () => {
     // managerId 와 role 이 어긋나면 데이터상 상급자인데 권한은 없는 상태가 된다.
     vi.mocked(prisma.salesRep.findUnique).mockResolvedValue(REP);
 
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     expect(response.status).toBe(400);
-    expect((await readBody(response)).error?.code).toBe("MANAGER_ROLE_REQUIRED");
+    expect((await readBody(response)).error?.code).toBe(
+      "MANAGER_ROLE_REQUIRED",
+    );
     expect(prisma.salesRep.create).not.toHaveBeenCalled();
   });
 });
 
 describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
   it("비밀번호를 생략하면 임시 비밀번호를 응답에 1회 담는다", async () => {
-    const response = await POST(asAdmin(URL, { method: "POST", body: CREATE_BODY }));
+    const response = await POST(
+      asAdmin(URL, { method: "POST", body: CREATE_BODY }),
+    );
 
     // 평문은 저장되지 않으므로 이 응답이 유일한 전달 경로다.
     expect((await readBody(response)).data).toMatchObject({
@@ -318,11 +374,14 @@ describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
 
   it("비밀번호를 직접 지정하면 임시 비밀번호를 담지 않는다", async () => {
     const response = await POST(
-      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "longenough-123" } })
+      asAdmin(URL, {
+        method: "POST",
+        body: { ...CREATE_BODY, password: "longenough-123" },
+      }),
     );
 
     expect(await readBody(response).then((b) => b.data)).not.toHaveProperty(
-      "temporaryPassword"
+      "temporaryPassword",
     );
     expect(generateTemporaryPassword).not.toHaveBeenCalled();
   });
@@ -335,13 +394,18 @@ describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
     await POST(asAdmin(URL, { method: "POST", body }));
 
     expect(prisma.salesRep.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ mustChangePassword: true }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ mustChangePassword: true }),
+      }),
     );
   });
 
   it("12자 미만 비밀번호는 400 이다", async () => {
     const response = await POST(
-      asAdmin(URL, { method: "POST", body: { ...CREATE_BODY, password: "short-11ch" } })
+      asAdmin(URL, {
+        method: "POST",
+        body: { ...CREATE_BODY, password: "short-11ch" },
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -352,7 +416,8 @@ describe("POST /api/sales-reps — 임시 비밀번호 발급 (#44)", () => {
 describe("GET /api/sales-reps — 상급자 이름·역할 필터 (#17)", () => {
   it("목록에 상급자 이름을 담는다", async () => {
     const body = await readBody(await GET(asAdmin(URL)));
-    const [first] = (body.data as { content: { managerName: string | null }[] }).content;
+    const [first] = (body.data as { content: { managerName: string | null }[] })
+      .content;
 
     expect(first.managerName).toBe("김부장");
   });
@@ -361,7 +426,9 @@ describe("GET /api/sales-reps — 상급자 이름·역할 필터 (#17)", () => 
     await GET(asAdmin(URL));
 
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ include: { manager: { select: { name: true } } } })
+      expect.objectContaining({
+        include: { manager: { select: { name: true } } },
+      }),
     );
   });
 
@@ -370,7 +437,7 @@ describe("GET /api/sales-reps — 상급자 이름·역할 필터 (#17)", () => 
 
     // 상급자 Select 는 MANAGER 만 고를 수 있어야 한다. (SCR-510)
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { role: "MANAGER" } })
+      expect.objectContaining({ where: { role: "MANAGER" } }),
     );
   });
 

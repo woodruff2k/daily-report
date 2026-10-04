@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     return apiSuccess(
-      pageResponse(reps.map(toSalesRepListItem), totalElements, pageRequest)
+      pageResponse(reps.map(toSalesRepListItem), totalElements, pageRequest),
     );
   } catch (error) {
     return apiErrorResponse(error);
@@ -63,11 +63,13 @@ export async function POST(request: NextRequest) {
     assertRole(parseAuthContext(request.headers), "ADMIN");
 
     const parsed = salesRepCreateSchema.safeParse(
-      await request.json().catch(() => null)
+      await request.json().catch(() => null),
     );
 
     if (!parsed.success) {
-      throw new ValidationError("필수 항목이 누락되었거나 형식이 올바르지 않습니다.");
+      throw new ValidationError(
+        "필수 항목이 누락되었거나 형식이 올바르지 않습니다.",
+      );
     }
 
     const { password, managerId, ...fields } = parsed.data;
@@ -98,7 +100,7 @@ export async function POST(request: NextRequest) {
         // 평문은 저장하지 않는다. 이 응답이 유일한 전달 경로다. (NFR-04)
         ...(temporaryPassword === null ? {} : { temporaryPassword }),
       },
-      201
+      201,
     );
   } catch (error) {
     return apiErrorResponse(mapSalesRepWriteError(error));
