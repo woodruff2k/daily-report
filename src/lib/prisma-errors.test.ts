@@ -3,6 +3,7 @@ import { ConflictError, NotFoundError } from "./errors";
 import {
   isRecordNotFound,
   mapCustomerWriteError,
+  mapReportWriteError,
   mapSalesRepWriteError,
   uniqueConstraintFields,
 } from "./prisma-errors";
@@ -79,5 +80,32 @@ describe("mapCustomerWriteError", () => {
   it("그 밖의 오류는 그대로 돌려준다", () => {
     const error = new Error("other");
     expect(mapCustomerWriteError(error)).toBe(error);
+  });
+});
+
+describe("mapReportWriteError", () => {
+  it("유니크 위반은 필드 표기와 무관하게 409 REPORT_ALREADY_EXISTS", () => {
+    for (const target of [
+      ["rep_id", "report_date"],
+      ["repId"],
+      "x",
+      undefined,
+    ]) {
+      expect(mapReportWriteError(prismaError("P2002", target))).toMatchObject({
+        code: "REPORT_ALREADY_EXISTS",
+        status: 409,
+      });
+    }
+  });
+
+  it("대상 없음(P2025)은 404", () => {
+    expect(mapReportWriteError(prismaError("P2025"))).toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it("그 외 오류는 그대로 돌려준다", () => {
+    const error = new Error("boom");
+    expect(mapReportWriteError(error)).toBe(error);
   });
 });
