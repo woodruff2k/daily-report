@@ -1,0 +1,12 @@
+# git blame 에서 건너뛸 커밋.
+#
+# 포맷만 바꾼 커밋은 blame 결과를 전부 자기 자신으로 덮는다. 아래 커밋을
+# 등록해 두면 blame 이 그 이전 작성자를 가리킨다.
+#
+# 한 번 설정하면 로컬에 계속 적용된다:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub 은 이 파일을 자동으로 인식한다.
+
+# style: prettier로 전체 재포맷 (#61)
+a53c44158ef381452d34c8a24493ec6c857e08d9
