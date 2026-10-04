@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ConflictError, NotFoundError } from "./errors";
 import {
   isRecordNotFound,
+  mapCustomerWriteError,
   mapSalesRepWriteError,
   uniqueConstraintFields,
 } from "./prisma-errors";
@@ -65,5 +66,18 @@ describe("mapSalesRepWriteError — TC-REP-02 중복 차단", () => {
     const unexpected = new Error("연결 실패");
 
     expect(mapSalesRepWriteError(unexpected)).toBe(unexpected);
+  });
+});
+
+describe("mapCustomerWriteError", () => {
+  it("P2025 는 404 로 바꾼다", () => {
+    expect(
+      mapCustomerWriteError(Object.assign(new Error("x"), { code: "P2025" })),
+    ).toMatchObject({ status: 404 });
+  });
+
+  it("그 밖의 오류는 그대로 돌려준다", () => {
+    const error = new Error("other");
+    expect(mapCustomerWriteError(error)).toBe(error);
   });
 });

@@ -65,3 +65,12 @@ export function mapSalesRepWriteError(error: unknown): unknown {
 
   return error;
 }
+
+/** 고객 마스터 쓰기에서 대상 없음(P2025)을 404 로 바꾼다. 나머지는 그대로 돌려준다. */
+export function mapCustomerWriteError(error: unknown): unknown {
+  if (isRecordNotFound(error)) {
+    return new NotFoundError("고객을 찾을 수 없습니다.");
+  }
+
+  return error;
+}
