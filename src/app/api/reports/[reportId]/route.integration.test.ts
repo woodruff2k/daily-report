@@ -1,0 +1,496 @@
+// 통합 테스트(실제 PostgreSQL). 목으로는 확인할 수 없던 트랜잭션·잠금 동작을 검증한다.
+// 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-05, TC-SUB-03,
+//          TC-CUS-05(비활성 고객의 과거 방문기록 유지), TC-NFR-01, TC-SEC-06
+// 이슈 #7: PUT 전체 교체의 원자성, status=DRAFT 조건부 UPDATE 의 직렬화
+import { describe, expect, it } from "vitest";
+import { GET, PUT } from "./route";
+import { POST as submit } from "./submit/route";
+import { prisma } from "@/lib/prisma";
+import { withHeldTransaction } from "@/test/integration/held-transaction";
+import {
+  createCustomer,
+  createRep,
+  createReport,
+  createTeam,
+  createVisit,
+} from "@/test/integration/factories";
+import { type Actor, call } from "@/test/integration/http";
+
+const getReport = (reportId: bigint, as: Actor) =>
+  call(GET, "GET", `/api/reports/${reportId}`, {
+    as,
+    params: { reportId },
+  });
+
+const putReport = (reportId: bigint, as: Actor, body: unknown) =>
+  call(PUT, "PUT", `/api/reports/${reportId}`, {
+    as,
+    body,
+    params: { reportId },
+  });
+
+const submitReport = (reportId: bigint, as: Actor) =>
+  call(submit, "POST", `/api/reports/${reportId}/submit`, {
+    as,
+    params: { reportId },
+  });
+
+const visitRow = (customerId: bigint, content = "테스트 방문 내용") => ({
+  customerId: Number(customerId),
+  visitType: "VISIT",
+  content,
+});
+
+describe("GET /api/reports/{id} (실제 DB)", () => {
+  it("TC-RPT-05: 본인 보고 상세에 방문·과제·계획이 포함된다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId, { sortOrder: 1 });
+    await prisma.reportProblem.create({
+      data: {
+        reportId: report.reportId,
+        customerId: customer.customerId,
+        content: "테스트 과제",
+      },
+    });
+    await prisma.reportPlan.create({
+      data: { reportId: report.reportId, content: "테스트 계획" },
+    });
+
+    const result = await getReport(report.reportId, rep);
+
+    expect(result.status).toBe(200);
+    expect(result.body.data).toMatchObject({
+      reportId: Number(report.reportId),
+      status: "DRAFT",
+      reportDate: "2026-07-01",
+      rep: { repId: Number(rep.repId), name: rep.name },
+      visits: [
+        {
+          customer: {
+            customerId: Number(customer.customerId),
+            customerName: customer.customerName,
+          },
+          visitType: "VISIT",
+        },
+      ],
+      problems: [{ content: "테스트 과제", status: "OPEN" }],
+      plans: [{ content: "테스트 계획" }],
+    });
+  });
+
+  it("TC-SEC-06: 상세 응답에 고객 연락처·이메일·주소와 사원 이메일·사번이 실리지 않는다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId);
+
+    const result = await getReport(report.reportId, rep);
+
+    expect(result.raw).toContain(customer.customerName);
+    for (const secret of [
+      customer.phone!,
+      customer.email!,
+      customer.address!,
+      rep.email,
+      rep.empNo,
+      rep.passwordHash,
+    ]) {
+      expect(result.raw).not.toContain(secret);
+    }
+  });
+
+  it("TC-SEC-01: 다른 사원의 보고(상급자 아님)는 403 이다 (IDOR)", async () => {
+    const owner = await createRep();
+    const intruder = await createRep();
+    const report = await createReport(owner.repId);
+
+    const result = await getReport(report.reportId, intruder);
+
+    expect(result.status).toBe(403);
+    expect(result.body.data).toBeNull();
+  });
+
+  it("TC-SEC-01: 다른 팀 상급자도 403 이다", async () => {
+    const { member } = await createTeam();
+    const { manager: otherManager } = await createTeam();
+    const report = await createReport(member.repId);
+
+    const result = await getReport(report.reportId, otherManager);
+
+    expect(result.status).toBe(403);
+  });
+
+  it("직속 상급자는 팀원 보고를 조회할 수 있다", async () => {
+    const { manager, member } = await createTeam();
+    const report = await createReport(member.repId);
+
+    const result = await getReport(report.reportId, manager);
+
+    expect(result.status).toBe(200);
+  });
+
+  it("없는 보고는 404 이다", async () => {
+    const rep = await createRep();
+
+    const result = await getReport(99999n, rep);
+
+    expect(result.status).toBe(404);
+  });
+});
+
+describe("PUT /api/reports/{id} (실제 DB)", () => {
+  it("TC-VST-01: 방문 2행을 저장하면 200 이고 DB 에 2건이 저장된다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [
+        visitRow(customer.customerId, "첫 방문"),
+        visitRow(customer.customerId, "두번째 방문"),
+      ],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    expect(
+      result.body.data.visits.map((v: { content: string }) => v.content),
+    ).toEqual(["첫 방문", "두번째 방문"]);
+    const rows = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+      orderBy: { sortOrder: "asc" },
+    });
+    expect(rows.map((r) => r.content)).toEqual(["첫 방문", "두번째 방문"]);
+  });
+
+  it("TC-VST-02: customerId 가 없는 행은 400 이고 DB 가 바뀌지 않는다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    const existing = await createVisit(report.reportId, customer.customerId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [{ visitType: "VISIT", content: "고객 없는 행" }],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(400);
+    const rows = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+    });
+    expect(rows.map((r) => r.visitId)).toEqual([existing.visitId]);
+  });
+
+  it("TC-VST-05: 전송하지 않은 기존 행은 삭제되고 보낸 행은 유지된다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    const keep = await createVisit(report.reportId, customer.customerId, {
+      content: "유지",
+    });
+    await createVisit(report.reportId, customer.customerId, {
+      content: "삭제 대상",
+      sortOrder: 2,
+    });
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [
+        {
+          ...visitRow(customer.customerId, "유지(수정)"),
+          visitId: Number(keep.visitId),
+        },
+      ],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    const rows = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      visitId: keep.visitId,
+      content: "유지(수정)",
+    });
+  });
+
+  it("이슈 #7 원자성: 자식 행 생성 단계에서 DB 오류가 나면 이미 지운 기존 방문·과제·계획이 롤백된다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId, {
+      content: "기존1",
+    });
+    await createVisit(report.reportId, customer.customerId, {
+      content: "기존2",
+      sortOrder: 2,
+    });
+    await prisma.reportProblem.create({
+      data: { reportId: report.reportId, content: "기존 과제" },
+    });
+    await prisma.reportPlan.create({
+      data: { reportId: report.reportId, content: "기존 계획" },
+    });
+    const before = await prisma.dailyReport.findUniqueOrThrow({
+      where: { reportId: report.reportId },
+    });
+
+    // 검증(스키마·고객 존재)은 통과하지만 INSERT 에서 PostgreSQL 이 거부하는 값이다.
+    // NUL 문자는 text 컬럼에 저장할 수 없다. deleteMany 3건이 이미 실행된 뒤에 실패한다.
+    await expect(
+      putReport(report.reportId, rep, {
+        visits: [visitRow(customer.customerId, "깨지는\u0000행")],
+        problems: [],
+        plans: [],
+      }),
+    ).rejects.toThrow();
+
+    const visits = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+      orderBy: { visitId: "asc" },
+    });
+    expect(visits.map((v) => v.content)).toEqual(["기존1", "기존2"]);
+    expect(
+      await prisma.reportProblem.count({
+        where: { reportId: report.reportId },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.reportPlan.count({ where: { reportId: report.reportId } }),
+    ).toBe(1);
+    const after = await prisma.dailyReport.findUniqueOrThrow({
+      where: { reportId: report.reportId },
+    });
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it("TC-SEC-01: 남의 보고 PUT 은 403 이고 내용이 바뀌지 않는다", async () => {
+    const owner = await createRep();
+    const intruder = await createRep();
+    const customer = await createCustomer(owner.repId);
+    const report = await createReport(owner.repId);
+    await createVisit(report.reportId, customer.customerId);
+
+    const result = await putReport(report.reportId, intruder, {
+      visits: [],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(403);
+    expect(
+      await prisma.visitRecord.count({ where: { reportId: report.reportId } }),
+    ).toBe(1);
+  });
+
+  it("TC-SUB-03: 제출된 보고의 PUT 은 409 REPORT_LOCKED 이고 내용이 바뀌지 않는다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId, { status: "SUBMITTED" });
+    await createVisit(report.reportId, customer.customerId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(409);
+    expect(result.body.error.code).toBe("REPORT_LOCKED");
+    expect(
+      await prisma.visitRecord.count({ where: { reportId: report.reportId } }),
+    ).toBe(1);
+  });
+
+  it("이슈 #7 직렬화: PUT 과 submit 을 동시에 보내도 제출 뒤에는 어떤 쓰기도 반영되지 않는다", async () => {
+    // PUT 은 상태를 바꾸지 않으므로 순서에 따라 결과가 갈린다.
+    //   PUT 먼저 → PUT 200, submit 200 (PUT 내용이 제출본에 포함)
+    //   submit 먼저 → submit 200, PUT 409 REPORT_LOCKED (원본 유지)
+    // 금지되는 결과: PUT 이 200 인데 내용이 반영되지 않았거나, 409 인데 내용이 바뀐 경우,
+    // submit 이 실패하는 경우, 500.
+    // 순서는 보장되지 않으므로 반복해서 두 갈래를 모두 지난다.
+    const outcomes = new Set<string>();
+
+    for (let i = 0; i < 12; i += 1) {
+      const rep = await createRep();
+      const customer = await createCustomer(rep.repId);
+      const report = await createReport(rep.repId, {
+        reportDate: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      });
+      await createVisit(report.reportId, customer.customerId, {
+        content: "원본",
+      });
+
+      const [put, sub] = await Promise.all([
+        putReport(report.reportId, rep, {
+          visits: [
+            visitRow(customer.customerId, "수정1"),
+            visitRow(customer.customerId, "수정2"),
+          ],
+          problems: [],
+          plans: [],
+        }),
+        submitReport(report.reportId, rep),
+      ]);
+
+      expect(sub.status).toBe(200);
+      expect([200, 409]).toContain(put.status);
+
+      const row = await prisma.dailyReport.findUniqueOrThrow({
+        where: { reportId: report.reportId },
+        include: { visits: { orderBy: { visitId: "asc" } } },
+      });
+      expect(row.status).toBe("SUBMITTED");
+      expect(row.submittedAt).not.toBeNull();
+
+      if (put.status === 200) {
+        outcomes.add("put-first");
+        expect(row.visits.map((v) => v.content).sort()).toEqual([
+          "수정1",
+          "수정2",
+        ]);
+      } else {
+        outcomes.add("submit-first");
+        expect(put.body.error.code).toBe("REPORT_LOCKED");
+        expect(row.visits.map((v) => v.content)).toEqual(["원본"]);
+      }
+    }
+
+    // 어느 갈래가 나왔는지는 보고용 정보일 뿐 단언하지 않는다(실행 순서 비결정).
+    expect(outcomes.size).toBeGreaterThan(0);
+  });
+
+  it("이슈 #7 직렬화(결정적): 다른 트랜잭션이 제출을 커밋하기 전에 읽은 DRAFT 로 들어온 PUT 은 409 REPORT_LOCKED 이고 내용이 바뀌지 않는다", async () => {
+    // PUT 의 첫 읽기는 커밋된 DRAFT 를 본다(assertReportEditable 통과). 그 뒤
+    // status=DRAFT 조건부 UPDATE 가 제출 트랜잭션의 행 잠금에 막혀 대기하고, 제출이
+    // 커밋되면 조건을 다시 평가해 0행이 된다. 이 재평가가 없으면 PUT 이 제출본을 덮는다.
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId, {
+      content: "원본",
+    });
+
+    const put = await withHeldTransaction(
+      (tx) =>
+        tx.dailyReport
+          .update({
+            where: { reportId: report.reportId },
+            data: { status: "SUBMITTED", submittedAt: new Date() },
+          })
+          .then(() => undefined),
+      () =>
+        putReport(report.reportId, rep, {
+          visits: [visitRow(customer.customerId, "제출 뒤 덮어쓰기")],
+          problems: [],
+          plans: [],
+        }),
+    );
+
+    expect(put.status).toBe(409);
+    expect(put.body.error.code).toBe("REPORT_LOCKED");
+    const visits = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+    });
+    expect(visits.map((v) => v.content)).toEqual(["원본"]);
+  });
+
+  it("이슈 #7 직렬화(결정적): 같은 상황에서 늦게 도착한 제출은 409 REPORT_ALREADY_SUBMITTED 이다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId);
+
+    const second = await withHeldTransaction(
+      (tx) =>
+        tx.dailyReport
+          .update({
+            where: { reportId: report.reportId },
+            data: { status: "SUBMITTED", submittedAt: new Date() },
+          })
+          .then(() => undefined),
+      () => submitReport(report.reportId, rep),
+    );
+
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe("REPORT_ALREADY_SUBMITTED");
+  });
+
+  it("TC-NFR-03: 같은 보고에 PUT 둘을 동시에 보내면 둘 다 성공하고 최종 상태는 한 쪽 내용이다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    const body = (content: string) => ({
+      visits: [visitRow(customer.customerId, content)],
+      problems: [],
+      plans: [],
+    });
+
+    const results = await Promise.all([
+      putReport(report.reportId, rep, body("A안")),
+      putReport(report.reportId, rep, body("B안")),
+    ]);
+
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    const rows = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+    });
+    expect(rows).toHaveLength(1);
+    expect(["A안", "B안"]).toContain(rows[0].content);
+  });
+});
+
+describe("TC-CUS-05 비활성 고객의 과거 방문기록 유지 (실제 DB)", () => {
+  it("고객을 INACTIVE 로 바꿔도 과거 보고 상세에 방문기록과 고객명이 그대로 보인다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId, { status: "SUBMITTED" });
+    await createVisit(report.reportId, customer.customerId, {
+      content: "과거 방문",
+    });
+    await prisma.customer.update({
+      where: { customerId: customer.customerId },
+      data: { status: "INACTIVE" },
+    });
+
+    const result = await getReport(report.reportId, rep);
+
+    expect(result.status).toBe(200);
+    expect(result.body.data.visits).toHaveLength(1);
+    expect(result.body.data.visits[0]).toMatchObject({
+      content: "과거 방문",
+      customer: {
+        customerId: Number(customer.customerId),
+        customerName: customer.customerName,
+      },
+    });
+  });
+
+  it("비활성 고객을 참조하는 방문기록이 있는 보고를 다시 저장해도 유지된다(NFR-03)", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId, { status: "INACTIVE" });
+    const report = await createReport(rep.repId);
+    const visit = await createVisit(report.reportId, customer.customerId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [
+        {
+          ...visitRow(customer.customerId, "수정"),
+          visitId: Number(visit.visitId),
+        },
+      ],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body.data.visits[0].customer.customerId).toBe(
+      Number(customer.customerId),
+    );
+  });
+});
