@@ -74,3 +74,26 @@ export function mapCustomerWriteError(error: unknown): unknown {
 
   return error;
 }
+
+/**
+ * 일일보고 생성의 유니크 위반을 409 로 바꾼다. (TC-RPT-02, TC-NFR-02)
+ *
+ * 사전 조회만으로 중복을 판단하면 동시 요청 둘이 모두 통과한다. 판정은 DB 의
+ * `(repId, reportDate)` 유니크 제약이 하고, 여기서는 그 위반을 응답으로 옮긴다.
+ * 일일보고에는 PK 외에 유니크가 이것 하나뿐이라 충돌 필드를 가리지 않는다 —
+ * `meta.target` 이 필드명으로 오는지 컬럼명으로 오는지에 판정이 흔들리지 않게 한다.
+ */
+export function mapReportWriteError(error: unknown): unknown {
+  if (uniqueConstraintFields(error) !== null) {
+    return new ConflictError(
+      "REPORT_ALREADY_EXISTS",
+      "해당 일자의 보고가 이미 있습니다.",
+    );
+  }
+
+  if (isRecordNotFound(error)) {
+    return new NotFoundError("보고를 찾을 수 없습니다.");
+  }
+
+  return error;
+}
