@@ -1,6 +1,7 @@
 // 통합 테스트(실제 PostgreSQL). 목으로는 확인할 수 없던 트랜잭션·잠금 동작을 검증한다.
 // 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-05, TC-SUB-03,
 //          TC-CUS-05(비활성 고객의 과거 방문기록 유지), TC-NFR-01, TC-SEC-06
+// 이슈 #85(과제·계획 순서): 해당 TC 없음. 가장 가까운 것은 TC-PRB-01·TC-PLN-01(다중 저장).
 // 이슈 #7: PUT 전체 교체의 원자성, status=DRAFT 조건부 UPDATE 의 직렬화
 import type { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
@@ -561,5 +562,138 @@ describe("TC-CUS-05 비활성 고객의 과거 방문기록 유지 (실제 DB)",
     expect(result.body.data.visits[0].customer.customerId).toBe(
       Number(customer.customerId),
     );
+  });
+});
+
+// 이슈 #85. 단위 테스트의 Prisma 목은 orderBy 를 틀리게 써도 통과하므로 실제 DB 로 본다.
+describe("과제·계획 순서 (실제 DB, 이슈 #85)", () => {
+  type Kind = "problems" | "plans";
+  const idKey = { problems: "problemId", plans: "planId" } as const;
+
+  const body = (kind: Kind, rows: object[]) => ({
+    visits: [],
+    problems: kind === "problems" ? rows : [],
+    plans: kind === "plans" ? rows : [],
+  });
+
+  const contents = (data: Record<Kind, { content: string }[]>, kind: Kind) =>
+    data[kind].map((row) => row.content);
+
+  it.each(["problems", "plans"] as const)(
+    "%s: 중간에 끼워 넣고 sortOrder 를 다시 매겨 저장하면 배열한 순서가 유지된다",
+    async (kind) => {
+      const rep = await createRep();
+      const report = await createReport(rep.repId);
+
+      // 1. A·B·C 저장 — 식별자가 오름차순으로 붙는다.
+      const first = await putReport(
+        report.reportId,
+        rep,
+        body(kind, [{ content: "A" }, { content: "B" }, { content: "C" }]),
+      );
+      expect(first.status).toBe(200);
+      const saved = first.body.data[kind] as Record<string, number>[] &
+        { content: string }[];
+      const ids = saved.map((row) => row[idKey[kind]]);
+      expect(ids).toEqual([...ids].sort((x, y) => x - y));
+      expect(contents(first.body.data, kind)).toEqual(["A", "B", "C"]);
+      expect(saved.map((row) => row.sortOrder)).toEqual([1, 2, 3]);
+
+      // 2. A 와 B 사이에 D 를 끼워 1·2·3·4 로 다시 매긴다. D 의 식별자가 가장 크다.
+      const [a, b, c] = ids;
+      const second = await putReport(
+        report.reportId,
+        rep,
+        body(kind, [
+          { [idKey[kind]]: a, content: "A", sortOrder: 1 },
+          { content: "D", sortOrder: 2 },
+          { [idKey[kind]]: b, content: "B", sortOrder: 3 },
+          { [idKey[kind]]: c, content: "C", sortOrder: 4 },
+        ]),
+      );
+      expect(second.status).toBe(200);
+
+      // 3. 다시 읽으면 A·D·B·C 다.
+      const reread = await getReport(report.reportId, rep);
+      expect(contents(reread.body.data, kind)).toEqual(["A", "D", "B", "C"]);
+      expect(
+        reread.body.data[kind].map(
+          (row: { sortOrder: number }) => row.sortOrder,
+        ),
+      ).toEqual([1, 2, 3, 4]);
+    },
+  );
+
+  it("sortOrder 를 생략하면 요청에 담은 순서가 저장 순서가 된다", async () => {
+    const rep = await createRep();
+    const report = await createReport(rep.repId);
+    await putReport(
+      report.reportId,
+      rep,
+      body("problems", [{ content: "A" }, { content: "B" }]),
+    );
+    const [rowA, rowB] = await prisma.reportProblem.findMany({
+      where: { reportId: report.reportId },
+      orderBy: { problemId: "asc" },
+    });
+
+    // B 를 앞으로 옮기되 sortOrder 는 보내지 않는다.
+    await putReport(
+      report.reportId,
+      rep,
+      body("problems", [
+        { problemId: Number(rowB.problemId), content: "B" },
+        { problemId: Number(rowA.problemId), content: "A" },
+      ]),
+    );
+
+    const reread = await getReport(report.reportId, rep);
+    expect(contents(reread.body.data, "problems")).toEqual(["B", "A"]);
+  });
+
+  it("sortOrder 가 모두 0 인 기존 데이터는 식별자 순서가 유지된다 (2차 키)", async () => {
+    const rep = await createRep();
+    const report = await createReport(rep.repId);
+    // 마이그레이션 직후의 상태: 컬럼 기본값 0 이 모든 기존 행에 채워진다.
+    // 삽입 순서와 식별자 순서가 같도록 하나씩 만든다.
+    for (const content of ["A", "B", "C", "D", "E"]) {
+      await prisma.reportProblem.create({
+        data: { reportId: report.reportId, content, sortOrder: 0 },
+      });
+      await prisma.reportPlan.create({
+        data: { reportId: report.reportId, content, sortOrder: 0 },
+      });
+    }
+    // 앞쪽 행을 갱신해 새 튜플 위치로 옮긴다. 다만 **이것이 2차 키를 지키지는
+    // 못한다** — 동점일 때 DB 가 어떤 순서를 주는지는 보장이 없고(힙 배치·HOT
+    // 갱신·PK 인덱스 스캔 선택에 달려 있다), 우연히 식별자 순서로 나오면 2차 키를
+    // 지워도 이 테스트가 통과한다. 결정적인 보장은 `src/lib/report.test.ts` 의
+    // "REPORT_DETAIL_INCLUDE 정렬" 이 `orderBy` 모양을 직접 단언해서 한다.
+    // 여기서는 실제 DB 에서도 기대한 순서로 나오는지를 본다.
+    await prisma.reportProblem.updateMany({
+      where: { reportId: report.reportId, content: { in: ["A", "B"] } },
+      data: { sortOrder: 0 },
+    });
+    await prisma.reportPlan.updateMany({
+      where: { reportId: report.reportId, content: { in: ["A", "B"] } },
+      data: { sortOrder: 0 },
+    });
+
+    const result = await getReport(report.reportId, rep);
+
+    expect(contents(result.body.data, "problems")).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+    ]);
+    expect(contents(result.body.data, "plans")).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+    ]);
   });
 });

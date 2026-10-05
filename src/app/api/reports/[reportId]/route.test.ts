@@ -255,6 +255,78 @@ describe("PUT /api/reports/{reportId}", () => {
     expect(rows.map((row) => row.sortOrder)).toEqual([1, 2]);
   });
 
+  // 이슈 #85. 해당 TC 없음(가장 가까운 것: TC-PRB-01, TC-PLN-01).
+  it("과제·계획의 sortOrder 를 모두 생략하면 요청 순서를 저장한다", async () => {
+    await put({
+      visits: [],
+      problems: [{ content: "a" }, { content: "b" }],
+      plans: [{ content: "a" }],
+    });
+
+    const problems = vi.mocked(prisma.reportProblem.createMany).mock.calls[0][0]
+      ?.data as { sortOrder: number }[];
+    const plans = vi.mocked(prisma.reportPlan.createMany).mock.calls[0][0]
+      ?.data as { sortOrder: number }[];
+    expect(problems.map((row) => row.sortOrder)).toEqual([1, 2]);
+    expect(plans.map((row) => row.sortOrder)).toEqual([1]);
+  });
+
+  it("과제·계획의 sortOrder 를 모두 보내면 그 값을 저장한다", async () => {
+    await put({
+      visits: [],
+      problems: [
+        { content: "a", sortOrder: 3 },
+        { problemId: 200, content: "c", sortOrder: 7 },
+      ],
+      plans: [
+        { content: "a", sortOrder: 4 },
+        { planId: 300, content: "b", sortOrder: 9 },
+      ],
+    });
+
+    const problems = vi.mocked(prisma.reportProblem.createMany).mock.calls[0][0]
+      ?.data as { sortOrder: number }[];
+    const plans = vi.mocked(prisma.reportPlan.createMany).mock.calls[0][0]
+      ?.data as { sortOrder: number }[];
+    expect(problems.map((row) => row.sortOrder)).toEqual([3]);
+    expect(plans.map((row) => row.sortOrder)).toEqual([4]);
+    expect(prisma.reportProblem.updateMany).toHaveBeenCalledWith({
+      where: { problemId: 200n, reportId: 10n },
+      data: expect.objectContaining({ sortOrder: 7 }),
+    });
+    expect(prisma.reportPlan.updateMany).toHaveBeenCalledWith({
+      where: { planId: 300n, reportId: 10n },
+      data: expect.objectContaining({ sortOrder: 9 }),
+    });
+  });
+
+  // 일부만 보내면 배열 순서(index + 1)와 명시값이 한 배열에서 섞여 충돌한다.
+  it("sortOrder 를 일부 행만 보내면 400 이고 아무것도 쓰지 않는다", async () => {
+    const response = await put({
+      visits: [],
+      problems: [
+        { content: "D", sortOrder: 2 },
+        { problemId: 200, content: "A" },
+      ],
+      plans: [],
+    });
+
+    expect(response.status).toBe(400);
+    expect(prisma.reportProblem.createMany).not.toHaveBeenCalled();
+    expect(prisma.reportProblem.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("범위를 벗어난 과제 sortOrder 는 400 이고 아무것도 쓰지 않는다", async () => {
+    const response = await put({
+      visits: [],
+      problems: [{ content: "a", sortOrder: 10000 }],
+      plans: [],
+    });
+
+    expect(response.status).toBe(400);
+    expect(prisma.reportProblem.createMany).not.toHaveBeenCalled();
+  });
+
   it("비활성 고객도 참조할 수 있다 (고객 존재만 검증한다)", async () => {
     await put(SAVE_BODY);
 

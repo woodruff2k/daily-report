@@ -220,10 +220,10 @@
         "result": "견적요청", "sortOrder": 1 }
     ],
     "problems": [
-      { "problemId": 200, "customerId": 5, "content": "납기 단축 요청", "status": "OPEN" }
+      { "problemId": 200, "customerId": 5, "content": "납기 단축 요청", "status": "OPEN", "sortOrder": 1 }
     ],
     "plans": [
-      { "planId": 300, "customerId": 5, "plannedDate": "2026-06-21", "content": "견적서 발송" }
+      { "planId": 300, "customerId": 5, "plannedDate": "2026-06-21", "content": "견적서 발송", "sortOrder": 1 }
     ]
   }
 }
@@ -248,10 +248,10 @@
       "content": "재고 문의", "result": "보류", "sortOrder": 2 }
   ],
   "problems": [
-    { "customerId": 5, "content": "납기 단축 요청", "status": "OPEN" }
+    { "customerId": 5, "content": "납기 단축 요청", "status": "OPEN", "sortOrder": 1 }
   ],
   "plans": [
-    { "customerId": 5, "plannedDate": "2026-06-21", "content": "견적서 발송" }
+    { "customerId": 5, "plannedDate": "2026-06-21", "content": "견적서 발송", "sortOrder": 1 }
   ]
 }
 ```
@@ -263,6 +263,7 @@
 | visits | 최소 1건, 각 항목 customerId·visitType·content 필수 |
 | visitType | VISIT / CALL / ONLINE |
 | customerId | 활성 또는 참조 가능한 고객 |
+| sortOrder | visits·problems·plans 의 각 항목에 선택. 0~9999 정수. 생략하면 요청 배열 순서(1부터)를 따른다. 응답은 `sortOrder` 오름차순, 같으면 식별자 오름차순으로 돌려준다 |
 
 ### 3.5 일일보고 제출
 

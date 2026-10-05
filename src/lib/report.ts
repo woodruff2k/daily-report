@@ -42,8 +42,11 @@ export const REPORT_DETAIL_INCLUDE = {
     orderBy: [{ sortOrder: "asc" }, { visitId: "asc" }],
     include: { customer: { select: { customerId: true, customerName: true } } },
   },
-  problems: { orderBy: { problemId: "asc" } },
-  plans: { orderBy: { planId: "asc" } },
+  // 2차 키(식별자)를 빼면 안 된다. 마이그레이션 직후 기존 행은 sort_order 가
+  // 모두 0 이라 1차 키만으로는 전부 동점이고, DB 가 임의 순서로 돌려줘 기존
+  // 보고의 순서가 달라진다. 식별자가 "만들어진 순서"를 보존한다. (visits 와 같다)
+  problems: { orderBy: [{ sortOrder: "asc" }, { problemId: "asc" }] },
+  plans: { orderBy: [{ sortOrder: "asc" }, { planId: "asc" }] },
 } satisfies Prisma.DailyReportInclude;
 
 export type ReportDetailRecord = Prisma.DailyReportGetPayload<{
@@ -128,12 +131,14 @@ export interface ReportDetailResponse {
     customerId: number | null;
     content: string;
     status: "OPEN" | "CLOSED";
+    sortOrder: number;
   }[];
   plans: {
     planId: number;
     customerId: number | null;
     plannedDate: string | null;
     content: string;
+    sortOrder: number;
   }[];
 }
 
@@ -163,12 +168,14 @@ export function toReportDetail(
       customerId: toJsonIdOrNull(problem.customerId),
       content: problem.content,
       status: problem.status,
+      sortOrder: problem.sortOrder,
     })),
     plans: report.plans.map((plan) => ({
       planId: toJsonId(plan.planId),
       customerId: toJsonIdOrNull(plan.customerId),
       plannedDate: plan.plannedDate ? formatDateOnly(plan.plannedDate) : null,
       content: plan.content,
+      sortOrder: plan.sortOrder,
     })),
   };
 }
@@ -378,11 +385,13 @@ export async function replaceReportContent(
   }
 
   const newProblems: Prisma.ReportProblemCreateManyInput[] = [];
-  for (const row of input.problems) {
+  for (const [index, row] of input.problems.entries()) {
     const data = {
       customerId: row.customerId === null ? null : BigInt(row.customerId),
       content: row.content,
       status: row.status,
+      // 생략하면 요청 순서를 따른다. (방문기록과 같다)
+      sortOrder: row.sortOrder ?? index + 1,
     };
     if (row.problemId === undefined) {
       newProblems.push({ ...data, reportId });
@@ -395,11 +404,12 @@ export async function replaceReportContent(
   }
 
   const newPlans: Prisma.ReportPlanCreateManyInput[] = [];
-  for (const row of input.plans) {
+  for (const [index, row] of input.plans.entries()) {
     const data = {
       customerId: row.customerId === null ? null : BigInt(row.customerId),
       plannedDate: row.plannedDate === null ? null : toDbDate(row.plannedDate),
       content: row.content,
+      sortOrder: row.sortOrder ?? index + 1,
     };
     if (row.planId === undefined) {
       newPlans.push({ ...data, reportId });

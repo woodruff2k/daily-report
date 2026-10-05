@@ -141,6 +141,68 @@ describe("reportSaveSchema", () => {
   });
 });
 
+// 순서 컬럼(이슈 #85). 해당 TC 는 없다. 가장 가까운 것은 TC-VST-01(다중 행 저장).
+describe("reportSaveSchema sortOrder", () => {
+  it.each(["problems", "plans"] as const)(
+    "%s 의 sortOrder 는 생략하거나 0~9999 정수만 받는다",
+    (key) => {
+      const parse = (sortOrder?: unknown) =>
+        reportSaveSchema.safeParse({
+          visits: [],
+          problems: [],
+          plans: [],
+          [key]: [{ content: "내용", sortOrder }],
+        }).success;
+
+      expect(parse(undefined)).toBe(true);
+      expect(parse(0)).toBe(true);
+      expect(parse(9999)).toBe(true);
+      expect(parse(-1)).toBe(false);
+      expect(parse(10000)).toBe(false);
+      expect(parse(1.5)).toBe(false);
+      expect(parse("1")).toBe(false);
+    },
+  );
+
+  // 서버는 생략된 행에 배열 순서(index + 1)를 넣는다. 일부만 보내면 두 체계가 한
+  // 배열에서 섞여 값이 충돌하고, 배열 순서도 보낸 숫자도 아닌 순서가 나온다.
+  it.each(["visits", "problems", "plans"] as const)(
+    "%s 의 sortOrder 를 일부 행만 보내면 거부한다",
+    (key) => {
+      const row =
+        key === "visits"
+          ? { customerId: 1, visitType: "VISIT" as const, content: "내용" }
+          : { content: "내용" };
+      const parse = (rows: unknown[]) =>
+        reportSaveSchema.safeParse({
+          visits: [],
+          problems: [],
+          plans: [],
+          [key]: rows,
+        }).success;
+
+      // 전부 보내거나 전부 생략은 받는다.
+      expect(
+        parse([
+          { ...row, sortOrder: 1 },
+          { ...row, sortOrder: 2 },
+        ]),
+      ).toBe(true);
+      expect(parse([{ ...row }, { ...row }])).toBe(true);
+      // 섞으면 거부한다.
+      expect(parse([{ ...row, sortOrder: 2 }, { ...row }])).toBe(false);
+      expect(parse([{ ...row }, { ...row, sortOrder: 1 }])).toBe(false);
+      // 같은 숫자를 일부러 두 번 보내는 것은 막지 않는다(동점 처리가 정의돼 있다).
+      expect(
+        parse([
+          { ...row, sortOrder: 1 },
+          { ...row, sortOrder: 1 },
+        ]),
+      ).toBe(true);
+    },
+  );
+});
+
 // 이슈 #75: NUL 은 400, 줄바꿈·탭은 허용(회귀)
 describe("reportSaveSchema 제어문자", () => {
   const visit = { customerId: 1, visitType: "VISIT", content: "내용" };

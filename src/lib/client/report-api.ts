@@ -102,12 +102,14 @@ export interface ReportDetail {
     customerId: number | null;
     content: string;
     status: ProblemStatus;
+    sortOrder: number;
   }[];
   plans: {
     planId: number;
     customerId: number | null;
     plannedDate: string | null;
     content: string;
+    sortOrder: number;
   }[];
 }
 
@@ -127,12 +129,14 @@ export interface ReportSaveBody {
     customerId: number | null;
     content: string;
     status: ProblemStatus;
+    sortOrder: number;
   }[];
   plans: {
     planId?: number;
     customerId: number | null;
     plannedDate: string | null;
     content: string;
+    sortOrder: number;
   }[];
 }
 

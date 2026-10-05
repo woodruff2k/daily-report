@@ -93,6 +93,7 @@ erDiagram
         bigint customer_id FK "관련 고객(선택)"
         string content "과제/상담 내용"
         string status "OPEN/CLOSED"
+        int sort_order "정렬순서"
         datetime created_at
     }
 
@@ -102,6 +103,7 @@ erDiagram
         bigint customer_id FK "관련 고객(선택)"
         string content "내일 할 일"
         date planned_date "예정일"
+        int sort_order "정렬순서"
         datetime created_at
     }
 

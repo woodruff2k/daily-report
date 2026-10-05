@@ -6,6 +6,7 @@ import {
   SUBMITTED_REPORT,
 } from "@/test/report-fixtures";
 import {
+  REPORT_DETAIL_INCLUDE,
   assertReportViewable,
   formatDateOnly,
   lockDraftReport,
@@ -64,6 +65,14 @@ describe("toReportDetail", () => {
     expect(JSON.stringify(detail)).not.toContain("managerId");
     expect(detail.visits[0]).not.toHaveProperty("reportId");
     expect(detail.visits[0]).not.toHaveProperty("createdAt");
+  });
+
+  // 이슈 #85. 해당 TC 없음(가장 가까운 것: TC-RPT-05).
+  it("과제·계획도 방문기록처럼 sortOrder 를 담는다", () => {
+    const detail = toReportDetail(SUBMITTED_REPORT);
+
+    expect(detail.problems[0].sortOrder).toBe(1);
+    expect(detail.plans[0].sortOrder).toBe(1);
   });
 });
 
@@ -136,4 +145,27 @@ describe("parseReportIdParam", () => {
       );
     },
   );
+});
+
+/**
+ * 순서 컬럼(이슈 #85). 해당 TC 는 없다. 가장 가까운 것은 TC-RPT-05(상세 조회).
+ *
+ * `orderBy` 모양을 **직접** 단언한다. 통합 테스트로는 2차 키를 지킬 수 없다 —
+ * 동점일 때 DB 가 어떤 순서를 주는지는 보장이 없고(힙 배치·HOT 갱신·PK 인덱스
+ * 스캔 선택에 달려 있다), 우연히 식별자 순서로 나오면 2차 키를 지워도 통과한다.
+ * 이 단언은 결정적이다.
+ */
+describe("REPORT_DETAIL_INCLUDE 정렬 (#85)", () => {
+  it.each([
+    ["visits", "visitId"],
+    ["problems", "problemId"],
+    ["plans", "planId"],
+  ] as const)("%s 는 sortOrder 다음 %s 로 정렬한다", (section, idField) => {
+    // 2차 키(식별자)가 없으면 마이그레이션 직후 sort_order 가 모두 0 인 기존 행이
+    // 전부 동점이 되어 기존 보고의 순서가 달라진다.
+    expect(REPORT_DETAIL_INCLUDE[section].orderBy).toEqual([
+      { sortOrder: "asc" },
+      { [idField]: "asc" },
+    ]);
+  });
 });
