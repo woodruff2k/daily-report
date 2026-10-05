@@ -41,7 +41,7 @@ import { useApiErrors } from "@/lib/client/use-api-errors";
 import { getStoredRep } from "@/lib/client/auth-storage";
 import { customerErrorMessage } from "@/lib/client/customer-api";
 import { isUnauthorized } from "@/lib/client/api-client";
-import { CustomerPicker } from "./customer-picker";
+import { CustomerPicker } from "@/components/customer-picker";
 
 const NATIVE_SELECT =
   "h-9 rounded-md border border-input bg-transparent px-3 text-sm";

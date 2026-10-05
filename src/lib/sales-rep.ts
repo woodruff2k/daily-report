@@ -71,6 +71,25 @@ export function toSalesRepOption(
   return { repId: toJsonId(rep.repId), name: rep.name };
 }
 
+/**
+ * 팀원 Select 옵션 응답 항목. (API 명세 6.7)
+ *
+ * `status` 를 담는 것이 6.6 과 다르다. 비활성 팀원도 조회 범위 안이라 화면이
+ * "(비활성)" 을 표시해야 한다. 사번·이메일·부서·직급은 담지 않는다. (NFR-04)
+ */
+export interface SalesRepTeamOption {
+  repId: number;
+  name: string;
+  status: SalesRep["status"];
+}
+
+/** Prisma 레코드를 팀원 옵션으로 바꾼다. 인자 타입을 좁혀 다른 컬럼을 막는다. */
+export function toSalesRepTeamOption(
+  rep: Pick<SalesRep, "repId" | "name" | "status">,
+): SalesRepTeamOption {
+  return { repId: toJsonId(rep.repId), name: rep.name, status: rep.status };
+}
+
 /** 상급자 이름을 함께 읽은 레코드. */
 export type SalesRepWithManager = SalesRep & {
   manager: { name: string } | null;

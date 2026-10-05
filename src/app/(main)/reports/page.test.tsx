@@ -412,4 +412,32 @@ describe("SCR-200 일일보고 목록 — #12", () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
+
+  // 이 화면의 loaded 주석은 "조회 실패에서 '조회 결과가 없습니다' 가 뜬다" 를 막는
+  // 것이라고 적었지만, setLoaded(true) 가 finally 에 있어 실패도 "불러왔다" 로
+  // 읽혔다. (#15 검토에서 발견)
+  it("조회가 실패하면 빈 결과 문구와 쪽수를 보여주지 않는다", async () => {
+    const user = userEvent.setup();
+    let failNext = false;
+    mockApi(() =>
+      failNext
+        ? fail(
+            400,
+            "INVALID_REQUEST",
+            "fromDate 는 toDate 보다 늦을 수 없습니다.",
+          )
+        : ok(pageData(ROWS, 0, 3, 55)),
+    );
+    render(<ReportListPage />);
+    await screen.findByText("2026-10-05");
+
+    failNext = true;
+    await user.click(screen.getByRole("button", { name: "검색" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "늦을 수 없습니다",
+    );
+    expect(screen.queryByText("조회 결과가 없습니다.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ \/ \d+ 페이지/)).not.toBeInTheDocument();
+  });
 });

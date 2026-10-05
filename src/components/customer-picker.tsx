@@ -19,6 +19,17 @@ interface Props {
   onChange: (next: CustomerRef | null) => void;
   /** 검색 실패를 문장으로. 401 처리도 이 함수가 한다(`useApiErrors`). */
   toMessage: (caught: unknown, fallback: string) => string;
+  /**
+   * 비활성 고객도 찾는다. 기본값은 false 다.
+   *
+   * **입력과 검색이 서로 다른 답을 원한다.** 새 방문기록을 쓸 때(SCR-210)는 활성
+   * 고객만 골라야 한다 — 비활성 고객에 새 방문을 남기는 것은 마스터 비활성화의
+   * 뜻을 거스른다. 반대로 **과거 보고를 검색할 때(SCR-300)는 비활성 고객도 찾아야
+   * 한다.** 마스터를 지우지 않고 비활성화하는 이유가 "과거 보고와의 참조를
+   * 유지" 하기 위해서인데(NFR-03), 그 고객으로 필터할 수 없으면 보존한 이력에
+   * 닿을 수 없다. 서버의 `customerId` 필터에도 상태 제약이 없다.
+   */
+  includeInactive?: boolean;
 }
 
 interface SearchResult {
@@ -28,14 +39,20 @@ interface SearchResult {
 }
 
 /**
- * 고객 검색 선택. (SCR-210 세 섹션 공용)
+ * 고객 검색 선택. (SCR-210 세 섹션·SCR-300 공용)
  *
  * `GET /api/customers?keyword=` 는 전사 조회라 담당이 아닌 고객도 찾는다.
- * 검색어를 디바운스한 뒤 활성 고객만 버튼 목록으로 보여주고, 고르면 이름을
- * 보여준다. 선택은 지울 수 있다(과제·계획은 고객이 선택이다).
+ * 검색어를 디바운스한 뒤 버튼 목록으로 보여주고, 고르면 이름을
+ * 보여준다. 기본은 활성 고객만이고 `includeInactive` 로 넓힌다. 선택은 지울 수 있다(과제·계획은 고객이 선택이다).
  * 서버가 customerId 를 다시 검증하므로 이 선택은 사용성일 뿐이다.
  */
-export function CustomerPicker({ label, value, onChange, toMessage }: Props) {
+export function CustomerPicker({
+  label,
+  value,
+  onChange,
+  toMessage,
+  includeInactive = false,
+}: Props) {
   const [keyword, setKeyword] = useState("");
   const [result, setResult] = useState<SearchResult | null>(null);
   const trimmed = keyword.trim();
@@ -49,7 +66,7 @@ export function CustomerPicker({ label, value, onChange, toMessage }: Props) {
         try {
           const page = await listCustomers({
             keyword: trimmed,
-            status: "ACTIVE",
+            ...(includeInactive ? {} : { status: "ACTIVE" }),
             size: RESULT_SIZE,
           });
           if (!cancelled)
@@ -68,7 +85,7 @@ export function CustomerPicker({ label, value, onChange, toMessage }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmed, toMessage]);
+  }, [trimmed, toMessage, includeInactive]);
 
   if (value !== null) {
     return (
@@ -127,6 +144,7 @@ export function CustomerPicker({ label, value, onChange, toMessage }: Props) {
                 {item.companyName
                   ? `${item.customerName} (${item.companyName})`
                   : item.customerName}
+                {item.status === "INACTIVE" ? " (비활성)" : ""}
               </Button>
             </li>
           ))}
