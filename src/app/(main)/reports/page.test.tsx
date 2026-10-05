@@ -370,18 +370,31 @@ describe("SCR-200 일일보고 목록 — #12", () => {
     });
   });
 
-  it("403 이면 권한 메시지를 보여주고 이동하지 않는다 (관리자)", async () => {
+  // 403 은 서버가 조건별로 정확한 문장을 준다(역할 불일치, 조회 범위 밖, …). 모두
+  // 코드 `FORBIDDEN` 하나로 오므로 화면이 한 문장으로 덮으면 맞지 않는 안내가
+  // 나간다 — 조회 범위 밖의 보고를 연 상급자에게 "영업사원·상급자만" 은 거짓이다.
+  it("403 이면 서버가 준 사유를 보여주고 이동하지 않는다 (관리자)", async () => {
     window.localStorage.setItem(
       "daily-report.rep",
       JSON.stringify({ repId: 4, name: "시스템관리자", role: "ADMIN" }),
     );
-    mockApi(() => fail(403, "FORBIDDEN"));
+    // ADMIN 은 역할로 막힌다 — assertAnyRole 이 주는 실제 문장이다.
+    mockApi(() => fail(403, "FORBIDDEN", "이 작업을 수행할 권한이 없습니다."));
+    render(<ReportListPage />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이 작업을 수행할 권한이 없습니다.",
+    );
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("403 에 문장이 없으면 기본 권한 문구로 돌아간다", async () => {
+    mockApi(() => fail(403, "FORBIDDEN", ""));
     render(<ReportListPage />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "영업사원·상급자만 사용할 수 있습니다",
     );
-    expect(replace).not.toHaveBeenCalled();
   });
 
   it("401 이면 토큰을 지우고 로그인으로 보낸다", async () => {

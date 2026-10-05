@@ -119,6 +119,12 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 9, 5, 20, 0) });
   window.localStorage.clear();
   window.localStorage.setItem("daily-report.accessToken", "user.token");
+  // 작성자 본인으로 로그인한다(상세의 rep.repId 와 같다). 편집 화면은 작성자만
+  // 들어갈 수 있어 이것이 없으면 모든 테스트가 상세로 돌려보내진다.
+  window.localStorage.setItem(
+    "daily-report.rep",
+    JSON.stringify({ repId: 2, name: "합성사원", role: "SALES_REP" }),
+  );
   replace.mockClear();
   push.mockClear();
 });
@@ -397,6 +403,23 @@ describe("SCR-210 일일보고 작성·수정 — #13", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "제출" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("작성자가 아니면 폼을 보여주지 않고 상세로 보낸다", async () => {
+    // 조회는 작성자와 직속 상급자 모두에게 열려 있어 상급자가 팀원의 DRAFT 보고로
+    // 이 URL 에 닿는다. 폼을 보여주면 입력한 뒤 저장에서야 403 을 받고 입력이
+    // 전부 사라진다.
+    window.localStorage.setItem(
+      "daily-report.rep",
+      JSON.stringify({ repId: 99, name: "상급자", role: "MANAGER" }),
+    );
+    mockApi();
+    render(<ReportEditPage />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/reports/10"));
+    expect(
+      screen.queryByRole("button", { name: "임시저장" }),
     ).not.toBeInTheDocument();
   });
 

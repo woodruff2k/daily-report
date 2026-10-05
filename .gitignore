@@ -35,5 +35,14 @@ coverage/
 # settings.local.json 에 등록해 쓴다.
 .claude/settings.local.json
 .claude/hooks/
+
+# git worktree
+#
+# /implement-issue-worktree-subagent 가 이슈마다 저장소 루트에 issue-<번호>/ 를
+# 만든다. 무시하지 않으면 메인 체크아웃의 `git status` 에 `?? issue-14/` 로 떠서
+# `git add -A` 한 번에 **복제된 소스 트리 전체가 main 에 올라간다.**
+# .git/info/exclude 에 하나씩 적어 왔는데 빠뜨리기 쉬웠다(issue-13·14 가 빠졌다).
+# 명령이 공유되므로 규칙도 저장소에 둔다.
+/issue-*/
 *.bak
 *.bak[0-9]

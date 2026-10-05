@@ -176,8 +176,14 @@ export function reportErrorMessage(caught: unknown, fallback: string) {
   if (USE_SERVER_MESSAGE.has(caught.code) && caught.message) {
     return caught.message;
   }
+  // 403 은 서버가 조건별로 정확한 문장을 준다 — 역할 불일치("이 작업을 수행할
+  // 권한이 없습니다"), 조회 범위 밖("해당 보고에 접근할 권한이 없습니다"), 댓글
+  // 작성 권한, 본인 댓글 아님이 모두 코드 `FORBIDDEN` 하나에 담겨 온다. 화면이
+  // 한 문장으로 덮으면 **맞지 않는 안내가 나간다** — 상급자가 조회 범위 밖의
+  // 보고를 열었을 때 "영업사원·상급자만 쓸 수 있습니다" 는 사실이 아니다.
+  // 그래서 서버 문장을 쓰고, 서버가 문장을 주지 않을 때만 기본 문구로 돌아간다.
   if (caught.status === 403) {
-    return ROLE_FORBIDDEN_MESSAGE;
+    return caught.message || ROLE_FORBIDDEN_MESSAGE;
   }
   return fallback;
 }
