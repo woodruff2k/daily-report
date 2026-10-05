@@ -19,6 +19,7 @@ vi.mock("@/lib/prisma", () => ({
     dailyReport: { findUnique: vi.fn() },
     reportComment: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       count: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -52,7 +53,10 @@ beforeEach(() => {
     .mockResolvedValue(SUBMITTED_REPORT_ROW as never);
   vi.mocked(prisma.reportComment.findFirst)
     .mockReset()
-    .mockResolvedValue({ commenterId: 2n } as never);
+    .mockResolvedValue({ commenterId: 2n, deletedAt: null } as never);
+  vi.mocked(prisma.reportComment.findUnique)
+    .mockReset()
+    .mockResolvedValue({ deletedAt: null } as never);
   vi.mocked(prisma.reportComment.count).mockReset().mockResolvedValue(0);
   vi.mocked(prisma.reportComment.update)
     .mockReset()
@@ -61,6 +65,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({} as never);
 });
+
+const SOFT_DELETED = { commenterId: 2n, deletedAt: new Date() } as never;
 
 describe("PUT /api/reports/{reportId}/comments/{commentId}", () => {
   it("본인 댓글은 200 이고 내용만 바꾼다", async () => {
@@ -72,7 +78,7 @@ describe("PUT /api/reports/{reportId}/comments/{commentId}", () => {
     // 스레드 위치는 바꾸지 못한다.
     expect(prisma.reportComment.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { commentId: 400n },
+        where: { commentId: 400n, deletedAt: null },
         data: { content: "수정함" },
       }),
     );
@@ -82,8 +88,22 @@ describe("PUT /api/reports/{reportId}/comments/{commentId}", () => {
     await put({ content: "수정함" });
     expect(prisma.reportComment.findFirst).toHaveBeenCalledWith({
       where: { commentId: 400n, reportId: 10n },
-      select: { commenterId: true },
+      select: { commenterId: true, deletedAt: true },
     });
+  });
+
+  it("삭제된 댓글은 404 이고 수정하지 않는다 (이슈 #71)", async () => {
+    vi.mocked(prisma.reportComment.findFirst).mockResolvedValue(SOFT_DELETED);
+    const response = await put({ content: "수정함" });
+
+    expect(response.status).toBe(404);
+    expect(prisma.reportComment.update).not.toHaveBeenCalled();
+  });
+
+  it("삭제된 타인 댓글도 403 이 아니라 404 다 (작성자를 알리지 않는다)", async () => {
+    vi.mocked(prisma.reportComment.findFirst).mockResolvedValue(SOFT_DELETED);
+
+    expect((await put({ content: "수정함" }, asSalesRep)).status).toBe(404);
   });
 
   it("TC-CMT-04: 타인 댓글은 403 이다 (보고를 볼 수 있는 작성자여도)", async () => {
@@ -166,16 +186,45 @@ describe("DELETE /api/reports/{reportId}/comments/{commentId}", () => {
     expect(prisma.reportComment.delete).not.toHaveBeenCalled();
   });
 
-  it("대댓글이 달린 댓글은 409 COMMENT_HAS_REPLIES", async () => {
-    vi.mocked(prisma.reportComment.count).mockResolvedValue(1);
-    const response = await del();
+  it("대댓글이 없으면 물리 삭제하고 deletedAt 은 쓰지 않는다", async () => {
+    await del();
 
-    expect(response.status).toBe(409);
-    expect((await readBody(response)).error?.code).toBe("COMMENT_HAS_REPLIES");
-    expect(prisma.reportComment.delete).not.toHaveBeenCalled();
+    expect(prisma.reportComment.delete).toHaveBeenCalledTimes(1);
+    expect(prisma.reportComment.update).not.toHaveBeenCalled();
     expect(prisma.reportComment.count).toHaveBeenCalledWith({
       where: { parentCommentId: 400n },
     });
+  });
+
+  it("이슈 #71: 대댓글이 달린 댓글은 204 이고 소프트 삭제한다 (409 가 아니다)", async () => {
+    vi.mocked(prisma.reportComment.count).mockResolvedValue(1);
+    const response = await del();
+
+    expect(response.status).toBe(204);
+    expect(prisma.reportComment.delete).not.toHaveBeenCalled();
+    expect(prisma.reportComment.update).toHaveBeenCalledWith({
+      where: { commentId: 400n },
+      data: { deletedAt: expect.any(Date) },
+    });
+  });
+
+  it("이슈 #71: 삭제된 댓글의 재삭제는 404 다", async () => {
+    vi.mocked(prisma.reportComment.findFirst).mockResolvedValue(SOFT_DELETED);
+    const response = await del();
+
+    expect(response.status).toBe(404);
+    expect(prisma.reportComment.delete).not.toHaveBeenCalled();
+    expect(prisma.reportComment.update).not.toHaveBeenCalled();
+  });
+
+  it("이슈 #71: 잠금을 잡는 사이 다른 요청이 먼저 삭제했다면 404 다", async () => {
+    vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
+      deletedAt: new Date(),
+    } as never);
+    const response = await del();
+
+    expect(response.status).toBe(404);
+    expect(prisma.reportComment.update).not.toHaveBeenCalled();
   });
 
   it("다른 보고의 commentId 는 404, 삭제하지 않는다", async () => {

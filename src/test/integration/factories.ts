@@ -127,7 +127,11 @@ export async function createVisit(
 export async function createComment(
   reportId: bigint,
   commenterId: bigint,
-  o: { parentCommentId?: bigint | null; content?: string } = {},
+  o: {
+    parentCommentId?: bigint | null;
+    content?: string;
+    deletedAt?: Date | null;
+  } = {},
 ): Promise<ReportComment> {
   return prisma.reportComment.create({
     data: {
@@ -135,6 +139,7 @@ export async function createComment(
       commenterId,
       parentCommentId: o.parentCommentId ?? null,
       content: o.content ?? "테스트 댓글",
+      deletedAt: o.deletedAt ?? null,
     },
   });
 }

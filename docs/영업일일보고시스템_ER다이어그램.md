@@ -112,6 +112,7 @@ erDiagram
         bigint parent_comment_id FK "대댓글(선택)"
         string content "댓글 내용"
         datetime created_at
+        datetime deleted_at "소프트 삭제(선택)"
     }
 ```
 
@@ -140,4 +141,8 @@ erDiagram
 - **댓글 대상**: 일일보고 단위로 설계. 과제(Problem)/계획(Plan) 단위로 댓글이 필요하면 `REPORT_COMMENT`에 `target_type`(REPORT/PROBLEM/PLAN) \+ `target_id` 다형성 컬럼으로 확장 가능.  
 - **상급자**: 별도 테이블 없이 `SALES_REP.manager_id` 자기참조로 표현.  
 - **마스터 무결성**: 고객/영업 마스터는 물리 삭제 대신 `status` 비활성화로 과거 보고와의 참조를 유지.
+- **댓글 삭제**: `REPORT_COMMENT.deleted_at` 으로 소프트 삭제한다. **대댓글이 달린 댓글만** 채우고, 대댓글이 없는 댓글은 물리 삭제한다.
+  - `parent_comment_id` 가 optional 이라 부모를 물리 삭제하면 Prisma 기본값 `SetNull` 로 **대댓글이 루트로 승격되어 뜻이 바뀐다** — 상급자 질문에 대한 답글이 맥락 없는 독립 댓글이 된다.
+  - 거부(409)로 막으면 상급자가 자기 댓글을 영구히 지울 수 없다(남의 대댓글을 지울 권한이 없다).
+  - 그래서 행과 스레드 구조를 남기고 응답에서 내용을 가린다. 자세한 동작은 API 명세서 4.3.
 

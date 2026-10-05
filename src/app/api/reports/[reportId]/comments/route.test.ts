@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DRAFT_REPORT_ROW,
   REPLY,
+  DELETED_ROOT,
   ROOT_COMMENT,
   SUBMITTED_REPORT_ROW,
   asAdmin,
@@ -41,6 +42,7 @@ const CREATED = {
   parentCommentId: null,
   content: "견적 일정 확인 바람",
   createdAt: new Date("2026-06-20T10:00:00.000Z"),
+  deletedAt: null,
   commenter: { repId: 2n, name: "테스트상급자" },
 };
 
@@ -63,6 +65,7 @@ beforeEach(() => {
     .mockResolvedValue({
       reportId: 10n,
       parentCommentId: null,
+      deletedAt: null,
     } as never);
   vi.mocked(prisma.reportComment.create)
     .mockReset()
@@ -78,6 +81,7 @@ describe("GET /api/reports/{reportId}/comments — TC-CMT-03", () => {
     expect(body.data).toEqual([
       {
         commentId: 400,
+        deleted: false,
         commenter: { repId: 2, name: "테스트상급자" },
         content: "견적 일정 확인 바람",
         parentCommentId: null,
@@ -85,6 +89,7 @@ describe("GET /api/reports/{reportId}/comments — TC-CMT-03", () => {
         replies: [
           {
             commentId: 401,
+            deleted: false,
             commenter: { repId: 1, name: "테스트사원" },
             content: "확인했습니다",
             parentCommentId: 400,
@@ -93,6 +98,25 @@ describe("GET /api/reports/{reportId}/comments — TC-CMT-03", () => {
         ],
       },
     ]);
+  });
+
+  it("소프트 삭제된 댓글은 deleted:true 이고 content·commenter 가 응답에 없다 (이슈 #71)", async () => {
+    vi.mocked(prisma.reportComment.findMany).mockResolvedValue([
+      DELETED_ROOT,
+    ] as never);
+    const body = await readBody(await get());
+    const [root] = body.data as unknown as Record<string, unknown>[];
+
+    expect(root).toEqual({
+      commentId: 400,
+      deleted: true,
+      parentCommentId: null,
+      createdAt: "2026-06-20T10:00:00.000Z",
+      // 스레드 구조는 남는다 — 대댓글은 그대로 부모 아래에 있다.
+      replies: [expect.objectContaining({ commentId: 401, deleted: false })],
+    });
+    expect(JSON.stringify(body)).not.toContain("견적 일정 확인 바람");
+    expect(JSON.stringify(body)).not.toContain("테스트상급자");
   });
 
   it("한 쿼리로 읽고 작성순 정렬하며 작성자는 repId·name 만 읽는다 (NFR-04)", async () => {
@@ -173,6 +197,7 @@ describe("POST /api/reports/{reportId}/comments — TC-CMT-01·02, TC-SEC-04", (
     expect(response.status).toBe(201);
     expect(body.data).toEqual({
       commentId: 402,
+      deleted: false,
       commenter: { repId: 2, name: "테스트상급자" },
       content: "견적 일정 확인 바람",
       parentCommentId: null,
@@ -269,6 +294,7 @@ describe("POST /api/reports/{reportId}/comments — TC-CMT-01·02, TC-SEC-04", (
     vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
       reportId: 77n,
       parentCommentId: null,
+      deletedAt: null,
     } as never);
     const response = await post({ content: "내용", parentCommentId: 400 });
 
@@ -290,8 +316,33 @@ describe("POST /api/reports/{reportId}/comments — TC-CMT-01·02, TC-SEC-04", (
     vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
       reportId: 77n,
       parentCommentId: 5n,
+      deletedAt: null,
     } as never);
     const response = await post({ content: "내용", parentCommentId: 401 });
+
+    expect((await readBody(response)).error?.code).toBe("PARENT_NOT_IN_REPORT");
+  });
+
+  it("삭제된 댓글에 대댓글을 달면 400 PARENT_DELETED (이슈 #71)", async () => {
+    vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
+      reportId: 10n,
+      parentCommentId: null,
+      deletedAt: new Date(),
+    } as never);
+    const response = await post({ content: "내용", parentCommentId: 400 });
+
+    expect(response.status).toBe(400);
+    expect((await readBody(response)).error?.code).toBe("PARENT_DELETED");
+    expect(prisma.reportComment.create).not.toHaveBeenCalled();
+  });
+
+  it("다른 보고의 삭제된 댓글은 PARENT_DELETED 가 아니라 소속 오류다 (IDOR)", async () => {
+    vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
+      reportId: 77n,
+      parentCommentId: null,
+      deletedAt: new Date(),
+    } as never);
+    const response = await post({ content: "내용", parentCommentId: 400 });
 
     expect((await readBody(response)).error?.code).toBe("PARENT_NOT_IN_REPORT");
   });
@@ -300,6 +351,7 @@ describe("POST /api/reports/{reportId}/comments — TC-CMT-01·02, TC-SEC-04", (
     vi.mocked(prisma.reportComment.findUnique).mockResolvedValue({
       reportId: 10n,
       parentCommentId: 400n,
+      deletedAt: null,
     } as never);
     const response = await post({ content: "내용", parentCommentId: 401 });
 

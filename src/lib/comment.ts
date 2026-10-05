@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { ConflictError, NotFoundError, ValidationError } from "./errors";
+import { NotFoundError, ValidationError } from "./errors";
 import { toJsonId, toJsonIdOrNull } from "./identifier";
 
 /**
@@ -13,6 +13,8 @@ export const COMMENT_SELECT = {
   parentCommentId: true,
   content: true,
   createdAt: true,
+  // 삭제 여부 판정용. 응답에는 `deleted` 플래그로만 나간다.
+  deletedAt: true,
   commenter: { select: { repId: true, name: true } },
 } satisfies Prisma.ReportCommentSelect;
 
@@ -37,29 +39,55 @@ export type CommentTreeRecord = Prisma.ReportCommentGetPayload<{
   select: typeof COMMENT_TREE_SELECT;
 }>;
 
-/** 댓글 응답. (API 명세 4.1·4.2·4.3) Prisma 모델을 그대로 반환하지 않는다. */
-export interface CommentResponse {
+/**
+ * 댓글 응답. (API 명세 4.1·4.2·4.3) Prisma 모델을 그대로 반환하지 않는다.
+ *
+ * 소프트 삭제된 댓글은 `deleted: true` 이고 `content`·`commenter` 키가 **없다**.
+ * 유니온이라 타입 수준에서 삭제된 댓글에 내용을 담을 수 없다. `content` 에
+ * "삭제된 댓글입니다" 같은 문구를 써 넣지 않는다 — 사용자가 같은 문장을 직접
+ * 입력한 경우와 구별할 수 없다. 상태는 플래그로, 표시 문구는 화면이 정한다.
+ */
+interface CommentBase {
   commentId: number;
-  commenter: { repId: number; name: string };
-  content: string;
   parentCommentId: number | null;
   createdAt: string;
 }
 
-export interface CommentThreadResponse extends CommentResponse {
-  replies: CommentResponse[];
+export interface LiveCommentResponse extends CommentBase {
+  deleted: false;
+  commenter: { repId: number; name: string };
+  content: string;
 }
 
+export interface DeletedCommentResponse extends CommentBase {
+  deleted: true;
+}
+
+export type CommentResponse = LiveCommentResponse | DeletedCommentResponse;
+
+export type CommentThreadResponse = CommentResponse & {
+  replies: CommentResponse[];
+};
+
 export function toCommentResponse(record: CommentRecord): CommentResponse {
-  return {
+  const base = {
     commentId: toJsonId(record.commentId),
+    parentCommentId: toJsonIdOrNull(record.parentCommentId),
+    createdAt: record.createdAt.toISOString(),
+  };
+
+  if (record.deletedAt !== null) {
+    return { ...base, deleted: true };
+  }
+
+  return {
+    ...base,
+    deleted: false,
     commenter: {
       repId: toJsonId(record.commenter.repId),
       name: record.commenter.name,
     },
     content: record.content,
-    parentCommentId: toJsonIdOrNull(record.parentCommentId),
-    createdAt: record.createdAt.toISOString(),
   };
 }
 
@@ -110,6 +138,11 @@ export async function lockComment(
  *   단이다. 깊이를 허용하면 응답 구조를 재귀로 바꿔야 하는데 명세에 없다.
  *   소속 확인이 먼저다 — 다른 보고의 댓글이 대댓글인지는 알려주지 않는다.
  */
+// 삭제된 루트에는 대댓글을 달 수 없다. 그 결과 보고 작성자는 그 스레드에 새
+// 댓글을 달 방법이 없어진다 — 루트 댓글은 쓸 수 없고(FR-09) 대댓글에 대댓글도
+// 안 된다. 의도한 제약이다: 스레드를 연 상급자가 피드백을 철회했으므로 대화가
+// 끝난 것으로 본다. 작성자의 기존 대댓글은 남고 수정·삭제도 된다. 상급자가 새
+// 루트 댓글을 달면 대화가 다시 열린다. (명세 4.3)
 export async function assertReplyParent(
   tx: Prisma.TransactionClient,
   reportId: bigint,
@@ -119,7 +152,7 @@ export async function assertReplyParent(
 
   const parent = await tx.reportComment.findUnique({
     where: { commentId: parentCommentId },
-    select: { reportId: true, parentCommentId: true },
+    select: { reportId: true, parentCommentId: true, deletedAt: true },
   });
 
   if (!parent || parent.reportId !== reportId) {
@@ -135,30 +168,62 @@ export async function assertReplyParent(
       "PARENT_IS_REPLY",
     );
   }
+
+  // 소속 확인 뒤에 본다 — 다른 보고의 댓글이 삭제됐는지는 알려주지 않는다.
+  // 같은 보고의 삭제된 댓글은 목록에 `deleted: true` 로 보이므로 구분해도 새는
+  // 정보가 없고, 화면이 "삭제된 댓글에는 답글을 달 수 없다" 를 말할 수 있다.
+  if (parent.deletedAt !== null) {
+    throw new ValidationError(
+      "삭제된 댓글에는 답글을 달 수 없습니다.",
+      "PARENT_DELETED",
+    );
+  }
 }
 
 /**
- * 대댓글이 없는 댓글만 삭제를 허용한다. (결정 4)
+ * 댓글을 지운다. 트랜잭션 안에서만 호출한다. (이슈 #71)
  *
- * 소프트 삭제 컬럼이 없고, 그냥 지우면 대댓글이 루트로 승격되어 뜻이 바뀐다.
- * 그래서 거부한다. 알려진 결함: 상급자 댓글에 작성자가 대댓글을 달면 상급자는
- * 자기 댓글을 지울 수 없다(남의 대댓글을 지울 권한이 없다). 소프트 삭제가 제대로
- * 된 답이며 별도 이슈다. 호출 전에 `lockComment(…, "UPDATE")` 를 잡아야 한다.
+ * - 대댓글이 없으면 물리 삭제다. 흔적을 남길 이유가 없다.
+ * - 대댓글이 있으면 `deletedAt` 만 채운다. 물리 삭제하면 대댓글의 부모가 NULL
+ *   (`onDelete` 기본 SetNull)이 되어 루트 댓글로 승격되고 뜻이 바뀐다.
+ *
+ * 분기 판정(삭제 여부 재확인·대댓글 수)은 **`FOR UPDATE` 를 잡은 뒤에** 한다.
+ * 대댓글 작성은 부모를 `FOR SHARE` 로 잡으므로 둘이 직렬화된다. 대댓글이 먼저
+ * 커밋되면 수가 1 이라 소프트 삭제, 삭제가 먼저면 대댓글이 부모 없음(400)이다.
+ * 잠금 전에 읽은 값은 믿지 않는다 — 동시에 온 두 번째 삭제가 여기서 404 가 된다.
+ *
+ * 모든 대댓글이 사라져도 소프트 삭제된 부모를 정리하지 않는다. 남은 행은 무해하고
+ * 정리를 넣으면 삭제 경로가 재귀가 된다.
  */
-export async function assertNoReplies(
+export async function deleteComment(
   tx: Prisma.TransactionClient,
   commentId: bigint,
-): Promise<void> {
-  const count = await tx.reportComment.count({
+): Promise<"HARD" | "SOFT"> {
+  await lockComment(tx, commentId, "UPDATE");
+
+  const current = await tx.reportComment.findUnique({
+    where: { commentId },
+    select: { deletedAt: true },
+  });
+
+  if (!current || current.deletedAt !== null) {
+    throw new NotFoundError("댓글을 찾을 수 없습니다.");
+  }
+
+  const replies = await tx.reportComment.count({
     where: { parentCommentId: commentId },
   });
 
-  if (count > 0) {
-    throw new ConflictError(
-      "COMMENT_HAS_REPLIES",
-      "대댓글이 달린 댓글은 삭제할 수 없습니다.",
-    );
+  if (replies === 0) {
+    await tx.reportComment.delete({ where: { commentId } });
+    return "HARD";
   }
+
+  await tx.reportComment.update({
+    where: { commentId },
+    data: { deletedAt: new Date() },
+  });
+  return "SOFT";
 }
 
 /**

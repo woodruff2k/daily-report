@@ -176,6 +176,9 @@ model ReportComment {
   parentCommentId BigInt?  @map("parent_comment_id") // 선택 (대댓글)
   content         String
   createdAt       DateTime @default(now()) @map("created_at")
+  // 소프트 삭제. 대댓글이 달린 댓글만 채운다(없는 댓글은 물리 삭제).
+  // updatedAt 은 두지 않는다 — "수정됨" 표시를 요구하는 요구사항이 없다.
+  deletedAt DateTime? @map("deleted_at")
 
   report    DailyReport     @relation(fields: [reportId], references: [reportId])
   commenter SalesRep        @relation(fields: [commenterId], references: [repId])

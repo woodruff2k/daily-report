@@ -9,9 +9,8 @@ import {
 import { parseCommentIdParam } from "@/lib/comment-query";
 import {
   COMMENT_SELECT,
-  assertNoReplies,
+  deleteComment,
   findReportForComment,
-  lockComment,
   toCommentResponse,
 } from "@/lib/comment";
 import { NotFoundError, ValidationError } from "@/lib/errors";
@@ -33,6 +32,7 @@ interface RouteContext {
  * 2. 댓글을 `(commentId, reportId)` 로 찾는다. 없는 댓글과 **다른 보고의 댓글**은
  *    같은 404 다. 경로의 `reportId` 가 그 댓글의 것이 아니면 다른 보고를 열람할
  *    권한으로 남의 댓글을 건드릴 수 없다.
+ *    소프트 삭제된 댓글도 같은 404 다.
  * 3. 그 다음에 작성자 본인인지 본다(`assertCommentAuthor`, 403).
  */
 async function loadOwnComment(
@@ -46,10 +46,12 @@ async function loadOwnComment(
 
   const comment = await client.reportComment.findFirst({
     where: { commentId, reportId },
-    select: { commenterId: true },
+    select: { commenterId: true, deletedAt: true },
   });
 
-  if (!comment) {
+  // 삭제된 댓글은 없는 댓글과 같은 404 다. 작성자 판정(403)보다 먼저 본다 —
+  // 삭제된 댓글의 작성자는 응답에서 가려지므로 403 으로 그 사실을 알리지 않는다.
+  if (!comment || comment.deletedAt !== null) {
     throw new NotFoundError("댓글을 찾을 수 없습니다.");
   }
 
@@ -83,9 +85,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     await loadOwnComment(prisma, auth, reportId, commentId);
 
-    // 읽은 뒤 삭제되었다면 P2025 → 404 로 매핑된다.
+    // 읽은 뒤 삭제(물리·소프트)되었다면 조건이 맞지 않아 P2025 → 404 로 매핑된다.
+    // `deletedAt: null` 을 쓰기에 걸어, 읽기와 쓰기 사이의 소프트 삭제도 막는다.
     const updated = await prisma.reportComment.update({
-      where: { commentId },
+      where: { commentId, deletedAt: null },
       data: { content: parsed.data.content },
       select: COMMENT_SELECT,
     });
@@ -99,9 +102,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 /**
  * 댓글 삭제. 본인 것만. (API 명세 4.3, TC-CMT-05)
  *
- * 대댓글이 달린 댓글은 409 `COMMENT_HAS_REPLIES` 다. 소프트 삭제 컬럼이 없고
- * 물리 삭제는 대댓글을 루트로 승격시키기 때문이다(`assertNoReplies` 주석 참고).
- * 대상 행을 잠근 뒤 대댓글 수를 세어, 그 사이 들어오는 대댓글과 직렬화한다.
+ * 대댓글이 없으면 물리 삭제, 있으면 소프트 삭제(`deletedAt`)이고 둘 다 204 다.
+ * 삭제된 댓글의 재삭제는 404 다. 분기는 행 잠금 안에서 판정한다(`deleteComment`).
+ * 409 `COMMENT_HAS_REPLIES` 는 소프트 삭제 도입(#71)으로 없어졌다.
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
@@ -114,9 +117,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     await prisma.$transaction(async (tx) => {
       await loadOwnComment(tx, auth, reportId, commentId);
-      await lockComment(tx, commentId, "UPDATE");
-      await assertNoReplies(tx, commentId);
-      await tx.reportComment.delete({ where: { commentId } });
+      await deleteComment(tx, commentId);
     });
 
     return new Response(null, { status: 204 });

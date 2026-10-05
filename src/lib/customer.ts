@@ -200,7 +200,7 @@ export function assertCustomerWritable(
   // 범용 FORBIDDEN 이 아니라 전용 코드를 준다. 화면이 "역할이 안 맞는 403"과
   // "남의 고객이라 안 되는 403"을 구분해야 하는데, 호출 지점으로 가르면 새
   // 호출부가 생길 때 조용히 틀린 문구가 나간다. 이 저장소의 다른 조건들도
-  // (ASSIGNED_REP_INACTIVE·COMMENT_HAS_REPLIES·LAST_ACTIVE_ADMIN) 전용 코드를 쓴다.
+  // (ASSIGNED_REP_INACTIVE·LAST_ACTIVE_ADMIN) 전용 코드를 쓴다.
   throw new AuthorizationError(
     "CUSTOMER_WRITE_FORBIDDEN",
     "이 고객을 수정할 권한이 없습니다.",
