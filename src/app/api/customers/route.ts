@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.customer.create({
       data: { ...fields, assignedRepId: BigInt(assignedRepId) },
+      // 담당 영업 이름을 함께 읽는다. 이름만 읽는다(NFR-04).
+      include: { assignedRep: { select: { name: true } } },
     });
 
     return apiSuccess(toCustomerResponse(created), 201);

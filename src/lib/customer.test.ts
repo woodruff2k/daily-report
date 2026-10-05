@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CUSTOMER, CUSTOMER_WITH_REP } from "@/test/customer-fixtures";
+import { CUSTOMER_WITH_REP } from "@/test/customer-fixtures";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: { salesRep: { findUnique: vi.fn() } },
@@ -32,11 +32,28 @@ describe("toCustomerListItem", () => {
 
 describe("toCustomerResponse", () => {
   it("식별자를 JSON 숫자로, 일시를 ISO 문자열로 바꾼다", () => {
-    const body = toCustomerResponse(CUSTOMER);
+    const body = toCustomerResponse(CUSTOMER_WITH_REP);
 
     expect(body.customerId).toBe(5);
     expect(body.email).toBe("customer@example.com");
     expect(body.createdAt).toBe("2026-06-20T09:00:00.000Z");
+  });
+
+  // 수정 화면(SCR-410)의 담당 영업 Select 는 활성 사원만 받는다. 기존 담당자가
+  // 비활성화되면 그 값이 목록에 없어 빈칸으로 보이므로, 이름으로 현재 담당자를
+  // 표시할 수 있어야 한다.
+  it("담당 영업 이름을 담는다", () => {
+    expect(toCustomerResponse(CUSTOMER_WITH_REP).assignedRepName).toBe(
+      "홍길동",
+    );
+  });
+
+  it("담당 영업이 없으면 이름도 null 이다", () => {
+    const body = toCustomerResponse({
+      ...CUSTOMER_WITH_REP,
+      assignedRep: null,
+    });
+    expect(body.assignedRepName).toBeNull();
   });
 });
 

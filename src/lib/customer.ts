@@ -26,6 +26,17 @@ export interface CustomerResponse {
   address: string | null;
   grade: string | null;
   assignedRepId: number | null;
+  /**
+   * 담당 영업 이름. 목록과 같은 이유로 담는다 — 식별자만 주면 화면이 다시
+   * 조회해야 한다.
+   *
+   * 수정 화면(SCR-410)에는 더 구체적인 이유가 있다. 담당 영업 Select 는
+   * `GET /api/sales-reps/options` 로 **활성 사원만** 받는다. 기존 담당자가
+   * 나중에 비활성화되면(마스터는 비활성화로 남는다, NFR-03) 그 값이 목록에
+   * 없어 Select 가 빈칸으로 보이고, 다른 필드만 고치려던 저장이 막힌다.
+   * 이름이 있으면 화면이 현재 담당자를 옵션으로 끼워 넣을 수 있다.
+   */
+  assignedRepName: string | null;
   status: Customer["status"];
   createdAt: string;
   updatedAt: string;
@@ -70,7 +81,13 @@ export function toCustomerListItem(
   };
 }
 
-export function toCustomerResponse(customer: Customer): CustomerResponse {
+export type CustomerWithRepName = Customer & {
+  assignedRep: { name: string } | null;
+};
+
+export function toCustomerResponse(
+  customer: CustomerWithRepName,
+): CustomerResponse {
   return {
     customerId: toJsonId(customer.customerId),
     customerName: customer.customerName,
@@ -80,6 +97,7 @@ export function toCustomerResponse(customer: Customer): CustomerResponse {
     address: customer.address,
     grade: customer.grade,
     assignedRepId: toJsonIdOrNull(customer.assignedRepId),
+    assignedRepName: customer.assignedRep?.name ?? null,
     status: customer.status,
     createdAt: customer.createdAt.toISOString(),
     updatedAt: customer.updatedAt.toISOString(),

@@ -25,6 +25,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const customerId = parseCustomerIdParam((await context.params).customerId);
     const customer = await prisma.customer.findUnique({
       where: { customerId },
+      // 담당 영업 이름을 함께 읽는다. 이름만 읽는다(NFR-04).
+      include: { assignedRep: { select: { name: true } } },
     });
 
     if (!customer) {
@@ -78,6 +80,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const updated = await prisma.customer.update({
       where: { customerId },
       data: { ...fields, assignedRepId: nextRepId },
+      // 담당 영업 이름을 함께 읽는다. 이름만 읽는다(NFR-04).
+      include: { assignedRep: { select: { name: true } } },
     });
 
     return apiSuccess(toCustomerResponse(updated));
