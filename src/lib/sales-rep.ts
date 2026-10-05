@@ -48,6 +48,29 @@ export interface SalesRepListItem {
   status: SalesRep["status"];
 }
 
+/**
+ * Select 옵션 응답 항목. (API 명세 6.6)
+ *
+ * 식별자와 이름뿐이다. 사번·이메일·부서·역할·상태를 담지 않는다 — Select 가
+ * 쓰는 것이 그 둘이고, 더 담으면 전 직원에게 보이는 노출이 된다. (NFR-04)
+ */
+export interface SalesRepOption {
+  repId: number;
+  name: string;
+}
+
+/**
+ * Prisma 레코드를 Select 옵션으로 바꾼다.
+ *
+ * 인자 타입을 `repId`·`name` 으로 좁혀, 쿼리가 다른 컬럼을 읽지 못하게 타입에서
+ * 한 번, `select` 에서 한 번 막는다. 컬럼이 늘어도 조용히 새 나가지 않는다.
+ */
+export function toSalesRepOption(
+  rep: Pick<SalesRep, "repId" | "name">,
+): SalesRepOption {
+  return { repId: toJsonId(rep.repId), name: rep.name };
+}
+
 /** 상급자 이름을 함께 읽은 레코드. */
 export type SalesRepWithManager = SalesRep & {
   manager: { name: string } | null;

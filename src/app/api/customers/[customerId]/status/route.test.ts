@@ -39,6 +39,7 @@ describe("PATCH /api/customers/{customerId}/status — TC-CUS-04", () => {
     expect(prisma.customer.update).toHaveBeenCalledWith({
       where: { customerId: 5n },
       data: { status: "INACTIVE" },
+      include: { assignedRep: { select: { name: true } } },
     });
     expect(prisma.customer.delete).not.toHaveBeenCalled();
     expect(prisma.customer.deleteMany).not.toHaveBeenCalled();

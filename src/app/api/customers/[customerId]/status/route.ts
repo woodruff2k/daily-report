@@ -34,6 +34,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const updated = await prisma.customer.update({
       where: { customerId },
       data: { status: parsed.data.status },
+      // 담당 영업 이름을 함께 읽는다. 이름만 읽는다(NFR-04).
+      include: { assignedRep: { select: { name: true } } },
     });
 
     return apiSuccess(toCustomerResponse(updated));

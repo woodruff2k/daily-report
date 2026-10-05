@@ -91,6 +91,7 @@ describe("PUT /api/customers/{customerId}", () => {
         assignedRepId: 1n,
         status: "ACTIVE",
       },
+      include: { assignedRep: { select: { name: true } } },
     });
   });
 

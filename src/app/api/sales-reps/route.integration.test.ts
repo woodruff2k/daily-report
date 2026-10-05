@@ -49,9 +49,9 @@ describe("POST /api/sales-reps (실제 DB)", () => {
     expect(await prisma.salesRep.count({ where: { empNo: "T0100" } })).toBe(1);
   });
 
-  // 알려진 제품 결함으로 현재 실패한다(보고 참조): Prisma 가 P2002 의 meta.target 을
-  // 모델 필드명("empNo")이 아니라 컬럼명(["emp_no"])으로 돌려줘 mapSalesRepWriteError 가
-  // DUPLICATE_VALUE 로 떨어진다. 단위 테스트는 target 을 "empNo" 로 목킹해 통과했다.
+  // Prisma 는 P2002 의 meta.target 을 컬럼명(`emp_no`)으로 준다. 필드명만
+  // 비교하던 구현이 사번 중복을 DUPLICATE_VALUE 로 떨어뜨렸고, 이 테스트가
+  // 그것을 잡았다(#19). 지금은 통과한다 — 회귀 방지로 남긴다.
   it("TC-REP-02: 같은 사번의 오류 코드는 DUPLICATE_EMP_NO 이다", async () => {
     const admin = await createRep({ role: "ADMIN" });
     await createRep({ empNo: "T0100" });
