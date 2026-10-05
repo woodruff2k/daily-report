@@ -43,12 +43,18 @@ describe("isRecordNotFound", () => {
 });
 
 describe("mapSalesRepWriteError — TC-REP-02 중복 차단", () => {
-  it("사번 중복은 409 DUPLICATE_EMP_NO 다", () => {
-    const mapped = mapSalesRepWriteError(prismaError("P2002", ["empNo"]));
+  // 실제 PostgreSQL 은 컬럼명(`emp_no`)을 준다 — 통합 테스트로 확인했다.
+  // 필드명(`empNo`)만 목킹하던 기존 테스트가 실제 계약과 어긋난 구현을
+  // 통과시켰다. 두 이름을 모두 고정한다.
+  it.each([["emp_no"], ["empNo"]])(
+    "사번 중복은 409 DUPLICATE_EMP_NO 다 — target=%s",
+    (target) => {
+      const mapped = mapSalesRepWriteError(prismaError("P2002", [target]));
 
-    expect(mapped).toBeInstanceOf(ConflictError);
-    expect((mapped as ConflictError).code).toBe("DUPLICATE_EMP_NO");
-  });
+      expect(mapped).toBeInstanceOf(ConflictError);
+      expect((mapped as ConflictError).code).toBe("DUPLICATE_EMP_NO");
+    },
+  );
 
   it("이메일 중복은 409 DUPLICATE_EMAIL 다", () => {
     expect(

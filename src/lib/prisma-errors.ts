@@ -30,6 +30,27 @@ export function uniqueConstraintFields(error: unknown): string[] | null {
   return typeof target === "string" ? [target] : [];
 }
 
+/**
+ * 충돌 필드 목록에 그 필드가 있는지. **필드명과 컬럼명을 모두 받는다.**
+ *
+ * PostgreSQL 에서 Prisma 가 주는 `meta.target` 은 **DB 컬럼명**이다. 스키마가
+ * `empNo String @map("emp_no")` 이므로 사번 충돌은 `["emp_no"]` 로 온다 —
+ * 실제 DB 로 확인했다. `email` 은 `@map` 이 없어 두 이름이 같고, 그래서 이
+ * 불일치가 사번에서만 드러났다.
+ *
+ * 필드명 비교만 하면 사번 중복이 `DUPLICATE_EMP_NO` 가 아니라
+ * `DUPLICATE_VALUE` 로 떨어진다. 화면이 사번 필드에 오류를 붙이지 못한다.
+ * (통합 테스트가 잡은 버그 — 단위 테스트는 target 을 `"empNo"` 로 목킹해
+ * 실제 계약과 어긋난 것을 통과시켰다.)
+ *
+ * 두 이름을 모두 받는 이유는 커넥터나 Prisma 버전에 따라 어느 쪽이 올지
+ * 보장되지 않기 때문이다.
+ */
+function hasField(fields: readonly string[], field: string): boolean {
+  const column = field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+  return fields.includes(field) || fields.includes(column);
+}
+
 /** 대상 레코드 없음(P2025) 여부. update·delete 가 빈 대상에 걸렸을 때 난다. */
 export function isRecordNotFound(error: unknown): boolean {
   return errorCode(error) === "P2025";
@@ -44,13 +65,13 @@ export function mapSalesRepWriteError(error: unknown): unknown {
   const fields = uniqueConstraintFields(error);
 
   if (fields !== null) {
-    if (fields.includes("empNo")) {
+    if (hasField(fields, "empNo")) {
       return new ConflictError(
         "DUPLICATE_EMP_NO",
         "이미 사용 중인 사번입니다.",
       );
     }
-    if (fields.includes("email")) {
+    if (hasField(fields, "email")) {
       return new ConflictError(
         "DUPLICATE_EMAIL",
         "이미 사용 중인 이메일입니다.",
