@@ -4,9 +4,19 @@ import {
   MIN_PASSWORD_LENGTH,
 } from "@/lib/password-policy";
 
+/** 이메일·사번을 받으므로 이메일 상한(255)을 쓴다. */
+export const MAX_LOGIN_ID_LENGTH = 255;
+
 export const loginRequestSchema = z.object({
-  loginId: z.string().min(1),
-  password: z.string().min(1),
+  // 제어문자(NUL 포함)는 조회 쿼리 파라미터로 PostgreSQL 이 거부해 500 이 된다.
+  loginId: z
+    .string()
+    .min(1)
+    .max(MAX_LOGIN_ID_LENGTH)
+    .refine(
+      (value) => !/[\u0000-\u001F\u007F]/.test(value) && value.isWellFormed(),
+    ),
+  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });
 
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
@@ -18,7 +28,7 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>;
  * 비밀번호를 갈아버릴 수 있다.
  */
 export const passwordChangeSchema = z.object({
-  currentPassword: z.string().min(1),
+  currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
   newPassword: z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH),
 });
 

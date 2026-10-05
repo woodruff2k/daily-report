@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthorizationError, ConflictError } from "./errors";
 import { apiError, apiErrorResponse, apiSuccess } from "./api-response";
 
@@ -75,9 +75,73 @@ describe("apiErrorResponse — TC-SEC-05 내부 정보 미노출", () => {
     });
   });
 
-  it("HttpError가 아니면 다시 던져 500으로 뭉개지 않는다", () => {
-    const unexpected = new Error("데이터베이스 연결 실패");
+  it("HttpError 응답은 로그를 남기지 않는다", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    expect(() => apiErrorResponse(unexpected)).toThrow(unexpected);
+    apiErrorResponse(new AuthorizationError("FORBIDDEN", "x", 403));
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("apiErrorResponse — 알 수 없는 오류 (이슈 #10, TC-SEC-05)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("던지지 않고 INTERNAL_ERROR 500 을 공통 봉투로 응답한다 (권한·검증 코드로 오인시키지 않는다)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = apiErrorResponse(new Error("데이터베이스 연결 실패"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      data: null,
+      error: { code: "INTERNAL_ERROR", message: "서버 오류가 발생했습니다." },
+    });
+  });
+
+  it("프로덕션에서는 detail 과 스택을 응답에 담지 않는다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = apiErrorResponse(new Error("내부 쿼리 실패 SELECT 1"));
+    const text = JSON.stringify(await response.json());
+
+    expect(text).not.toContain("detail");
+    expect(text).not.toContain("SELECT");
+    expect(text).not.toContain("stack");
+  });
+
+  it("개발에서는 마스킹된 detail 을 담는다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "development");
+
+    const response = apiErrorResponse(
+      new Error('insert failed email: "a@example.com"'),
+    );
+    const body = (await response.json()) as {
+      error: { detail?: string };
+    };
+
+    expect(body.error.detail).toContain("insert failed");
+    expect(body.error.detail).not.toContain("a@example.com");
+  });
+
+  it("서버 로그를 남기되 PII 는 마스킹한다 (TC-SEC-07)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    apiErrorResponse(
+      new Error('Unique failed phone: "010-0000-0000", user x@example.com'),
+    );
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(spy.mock.calls);
+    expect(logged).not.toContain("010-0000-0000");
+    expect(logged).not.toContain("x@example.com");
+    expect(logged).toContain("Unique failed");
   });
 });

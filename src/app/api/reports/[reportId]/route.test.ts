@@ -342,11 +342,16 @@ describe("PUT /api/reports/{reportId}", () => {
     expect(prisma.visitRecord.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("생성 단계가 실패하면 오류가 트랜잭션 밖으로 전파된다 (롤백)", async () => {
+  it("생성 단계가 실패하면 오류가 트랜잭션 밖으로 전파되어 500 INTERNAL_ERROR 가 된다 (롤백은 통합 테스트가 검증)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(prisma.visitRecord.createMany).mockRejectedValue(
       new Error("db down"),
     );
-    await expect(put(SAVE_BODY)).rejects.toThrow("db down");
+
+    const response = await put(SAVE_BODY);
+
+    expect(response.status).toBe(500);
+    expect((await readBody(response)).error?.code).toBe("INTERNAL_ERROR");
   });
 
   it("타인 보고는 403 이다. 상급자도 대신 저장할 수 없다 (IDOR)", async () => {

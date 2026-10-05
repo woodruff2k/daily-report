@@ -155,6 +155,22 @@ describe("POST /api/customers — TC-CUS-01·02", () => {
     expect(response.status).toBe(400);
   });
 
+  it.each([
+    ["과대 길이 주소(501자)", { address: "a".repeat(501) }],
+    ["고객명 NUL", { customerName: "a\u0000b" }],
+    ["enum 밖 status", { status: "DELETED" }],
+  ])("TC-SEC-05: %s 는 400 이고 스택이 실리지 않는다", async (_n, patch) => {
+    const response = await POST(
+      asSalesRep(URL, { method: "POST", body: { ...CUSTOMER_BODY, ...patch } }),
+    );
+    const raw = await response.text();
+
+    expect(response.status).toBe(400);
+    expect(raw).toContain("INVALID_REQUEST");
+    expect(raw).not.toMatch(/stack|\bat .*\(/);
+    expect(prisma.customer.create).not.toHaveBeenCalled();
+  });
+
   it("본문이 JSON 이 아니면 400", async () => {
     const request = asSalesRep(URL, { method: "POST" });
     expect((await POST(request)).status).toBe(400);

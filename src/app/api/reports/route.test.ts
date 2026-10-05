@@ -29,6 +29,12 @@ beforeEach(() => {
     .mockResolvedValue({ reportId: 10n, status: "DRAFT" } as never);
 });
 
+// 환경 스텁은 단언 실패와 무관하게 되돌린다. 테스트 본문 끝에 두면
+// 앞선 단언이 실패할 때 다음 테스트로 샌다.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("GET /api/reports — TC-RPT-03·04", () => {
   it("본인 보고 목록을 건수와 함께 돌려준다", async () => {
     const response = await GET(asSalesRep(URL));
@@ -155,11 +161,19 @@ describe("POST /api/reports — TC-RPT-01·02, TC-NFR-02", () => {
     expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
   });
 
-  it("유니크 위반이 아닌 DB 오류는 내용을 응답에 싣지 않고 던진다", async () => {
+  it("유니크 위반이 아닌 DB 오류는 내용을 응답에 싣지 않고 500 INTERNAL_ERROR 로 응답한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
     vi.mocked(prisma.dailyReport.create).mockRejectedValue(
       new Error("connection refused: secret-host"),
     );
-    await expect(post({ reportDate: "2026-06-20" })).rejects.toThrow();
+
+    const response = await post({ reportDate: "2026-06-20" });
+
+    expect(response.status).toBe(500);
+    const raw = await response.text();
+    expect(raw).toContain("INTERNAL_ERROR");
+    expect(raw).not.toContain("secret-host");
   });
 
   it.each([

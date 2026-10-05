@@ -148,3 +148,18 @@ describe("salesRepUpdateSchema — role (#48)", () => {
     ).toBe("MANAGER");
   });
 });
+
+// 이슈 #10·#75: 한 줄 필드의 제어문자
+describe("salesRepCreateSchema 제어문자", () => {
+  it.each([
+    ["사번 NUL", { empNo: "S\u0000" }],
+    ["이름 NUL", { name: "a\u0000b" }],
+    ["이름 줄바꿈", { name: "a\nb" }],
+    ["부서 탭", { department: "a\tb" }],
+    ["직급 줄바꿈", { position: "a\nb" }],
+  ])("%s 는 거부한다", (_name, patch) => {
+    expect(salesRepCreateSchema.safeParse({ ...VALID, ...patch }).success).toBe(
+      false,
+    );
+  });
+});

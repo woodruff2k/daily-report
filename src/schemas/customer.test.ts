@@ -70,3 +70,38 @@ describe("customerStatusSchemaBody", () => {
     expect(customerStatusSchemaBody.safeParse({}).success).toBe(false);
   });
 });
+
+// 이슈 #10·#75: 제어문자와 주소 상한
+describe("customerCreateSchema 제어문자·주소 상한", () => {
+  const base = { customerName: "테스트고객", assignedRepId: 1 };
+
+  it("주소는 500자까지 허용하고 501자는 거부한다", () => {
+    expect(
+      customerCreateSchema.safeParse({ ...base, address: "a".repeat(500) })
+        .success,
+    ).toBe(true);
+    expect(
+      customerCreateSchema.safeParse({ ...base, address: "a".repeat(501) })
+        .success,
+    ).toBe(false);
+  });
+
+  it("주소는 여러 줄을 허용한다 (회귀)", () => {
+    expect(
+      customerCreateSchema.parse({ ...base, address: "서울\n3층\t301호" })
+        .address,
+    ).toBe("서울\n3층\t301호");
+  });
+
+  it.each([
+    ["고객명 NUL", { customerName: "a\u0000b" }],
+    ["고객명 줄바꿈", { customerName: "a\nb" }],
+    ["회사명 탭", { companyName: "a\tb" }],
+    ["등급 줄바꿈", { grade: "A\nB" }],
+    ["주소 NUL", { address: "a\u0000b" }],
+  ])("%s 는 거부한다", (_name, patch) => {
+    expect(customerCreateSchema.safeParse({ ...base, ...patch }).success).toBe(
+      false,
+    );
+  });
+});
