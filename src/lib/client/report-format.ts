@@ -9,6 +9,12 @@ export function formatDate(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** `YYYY-MM-DD` 의 다음 날. 로컬 날짜 기준이며 월말·연말을 넘긴다. */
+export function nextDay(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return formatDate(new Date(year, month - 1, day + 1));
+}
+
 /** 기본 기간: 오늘로부터 한 달 전 ~ 오늘. */
 export function defaultRange(now: Date = new Date()) {
   const from = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
