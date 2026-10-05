@@ -38,6 +38,7 @@ import {
   type VisitRow,
 } from "@/lib/client/report-form";
 import { useApiErrors } from "@/lib/client/use-api-errors";
+import { getStoredRep } from "@/lib/client/auth-storage";
 import { customerErrorMessage } from "@/lib/client/customer-api";
 import { isUnauthorized } from "@/lib/client/api-client";
 import { CustomerPicker } from "./customer-picker";
@@ -148,6 +149,14 @@ export default function ReportEditPage() {
         if (cancelled) return;
         if (detail.status === "SUBMITTED") {
           // 저장할 수 없는 폼을 보여주지 않는다.
+          router.replace(`/reports/${reportId}`);
+          return;
+        }
+        // 남의 보고도 저장할 수 없다 — 서버가 PUT 을 403 으로 막는다. 조회는
+        // 작성자와 직속 상급자 모두에게 열려 있어 상급자가 팀원의 DRAFT 보고로
+        // 이 URL 에 닿을 수 있다. 폼을 보여주면 입력한 뒤 저장에서야 403 을 받고
+        // **입력이 전부 사라진다.** 상세로 돌려보낸다.
+        if (getStoredRep()?.repId !== detail.rep.repId) {
           router.replace(`/reports/${reportId}`);
           return;
         }
