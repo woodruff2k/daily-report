@@ -28,12 +28,20 @@ const STATUS_LABEL: Record<string, string> = {
   INACTIVE: "비활성",
 };
 
+const NOT_EDITABLE_REASON = "담당 영업과 그 상급자만 수정할 수 있습니다";
+
 /**
  * SCR-400 고객 마스터 목록. 영업사원·상급자용.
  *
  * 검색은 서버 필터로 한다. 전부 받아 화면에서 거르면 페이지네이션에 걸려 빠지는
  * 항목이 생긴다. 목록 응답에는 `email`·`address` 가 없으므로(NFR-04) 그 컬럼을
  * 두지 않는다. 관리자는 서버가 403 으로 막는다 — 화면 숨김은 접근통제가 아니다.
+ *
+ * 목록은 전사 공개라 남의 고객도 보인다. [수정] 은 서버가 준 `editable` 로 가른다.
+ * 행 단위로 다시 계산하지 않는다 — 상급자 판정에 필요한 담당 사원의 managerId 가
+ * 응답에 없다. `editable: false` 는 링크를 없애지 않고 비활성 버튼으로 두어 이유를
+ * 보인다. **`editable` 은 접근통제가 아니다** — 무시해도 PUT·PATCH 를 서버가 403 으로
+ * 막는다. (이슈 #68)
  */
 export default function CustomerListPage() {
   const report = useCustomerErrors();
@@ -222,12 +230,30 @@ export default function CustomerListPage() {
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Link
-                    href={`/customers/${customer.customerId}/edit`}
-                    className={buttonVariants({ variant: "ghost", size: "sm" })}
-                  >
-                    수정
-                  </Link>
+                  {customer.editable ? (
+                    <Link
+                      href={`/customers/${customer.customerId}/edit`}
+                      className={buttonVariants({
+                        variant: "ghost",
+                        size: "sm",
+                      })}
+                    >
+                      수정
+                    </Link>
+                  ) : (
+                    // 비활성 버튼은 호버를 받지 못해 title 을 감싸는 span 에 둔다.
+                    <span title={NOT_EDITABLE_REASON}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled
+                        aria-label={`수정 (${NOT_EDITABLE_REASON})`}
+                      >
+                        수정
+                      </Button>
+                    </span>
+                  )}
                 </TableCell>
               </TableRow>
             ))

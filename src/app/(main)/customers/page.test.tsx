@@ -22,6 +22,7 @@ const ROWS = [
     assignedRepId: 2,
     assignedRepName: "홍길동",
     status: "ACTIVE",
+    editable: true,
   },
   {
     customerId: 2,
@@ -32,6 +33,7 @@ const ROWS = [
     assignedRepId: null,
     assignedRepName: null,
     status: "INACTIVE",
+    editable: false,
   },
 ];
 
@@ -143,6 +145,48 @@ describe("SCR-400 고객 마스터 목록 — #16", () => {
 
     const links = screen.getAllByRole("link", { name: "수정" });
     expect(links[0]).toHaveAttribute("href", "/customers/1/edit");
+  });
+
+  // #68: editable 은 서버가 계산한다. 화면은 assignedRepId 로 다시 계산하지 않는다.
+  it("editable: false 인 행의 [수정] 은 링크가 아니라 비활성이고 이유가 보인다", async () => {
+    mockApi();
+    render(<CustomerListPage />);
+    await screen.findByText("두번째고객");
+
+    // 링크는 editable 인 행 하나뿐이다.
+    expect(screen.getAllByRole("link", { name: "수정" })).toHaveLength(1);
+    const disabled = screen.getByRole("button", {
+      name: /수정 \(담당 영업과 그 상급자만 수정할 수 있습니다\)/,
+    });
+    expect(disabled).toBeDisabled();
+    expect(
+      screen.getByTitle("담당 영업과 그 상급자만 수정할 수 있습니다"),
+    ).toBeInTheDocument();
+  });
+
+  it("assignedRepId 가 내 repId 여도 editable: false 면 비활성이다 (화면이 다시 계산하지 않는다)", async () => {
+    // 로그인 사용자 repId 는 2. 그 사람이 담당자인 행도 서버가 false 면 따른다.
+    mockApi(() =>
+      ok(pageData([{ ...ROWS[0], assignedRepId: 2, editable: false }])),
+    );
+    render(<CustomerListPage />);
+    await screen.findByText("테스트고객");
+
+    expect(screen.queryByRole("link", { name: "수정" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^수정 \(/ })).toBeDisabled();
+  });
+
+  it("assignedRepId 가 남이어도 editable: true 면 링크다 (상급자)", async () => {
+    mockApi(() =>
+      ok(pageData([{ ...ROWS[0], assignedRepId: 9, editable: true }])),
+    );
+    render(<CustomerListPage />);
+    await screen.findByText("테스트고객");
+
+    expect(screen.getByRole("link", { name: "수정" })).toHaveAttribute(
+      "href",
+      "/customers/1/edit",
+    );
   });
 
   it("[+ 신규 등록] 은 등록 화면으로 연결된다", () => {

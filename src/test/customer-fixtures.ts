@@ -19,8 +19,37 @@ export const CUSTOMER: Customer = {
 /** 담당 영업 이름을 함께 읽은 목록용 레코드. */
 export const CUSTOMER_WITH_REP = {
   ...CUSTOMER,
-  assignedRep: { name: "홍길동" },
+  // repId·managerId 는 목록의 `editable` 판정에 쓰고 응답에는 담지 않는다.
+  // 담당 영업(repId 1)의 직속 상급자는 repId 2 다.
+  assignedRep: { name: "홍길동", repId: 1n, managerId: 2n },
 };
+
+/**
+ * 쓰기 범위 판정용 조회 결과. 담당 영업(repId 1)의 직속 상급자는 repId 2 다.
+ * `asSalesRep`(1)은 담당 본인, `asManager`(2)는 직속 상급자다.
+ */
+export const CUSTOMER_WITH_SCOPE = {
+  ...CUSTOMER,
+  assignedRep: { repId: 1n, managerId: 2n },
+};
+
+/** 담당자와 무관한 영업사원(repId 7). */
+export function asStranger(url: string, options?: RequestOptions) {
+  return request(
+    url,
+    { "x-user-rep-id": "7", "x-user-role": "SALES_REP" },
+    options,
+  );
+}
+
+/** 다른 팀 상급자(repId 8). 담당 영업의 상급자가 아니다. */
+export function asOtherTeamManager(url: string, options?: RequestOptions) {
+  return request(
+    url,
+    { "x-user-rep-id": "8", "x-user-role": "MANAGER" },
+    options,
+  );
+}
 
 /** 담당 영업으로 지정 가능한 활성 사원. */
 export const ACTIVE_ASSIGNEE = { status: "ACTIVE" as const };
