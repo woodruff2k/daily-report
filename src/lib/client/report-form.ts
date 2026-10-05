@@ -153,23 +153,29 @@ export function toRows(
         content: visit.content,
         result: visit.result ?? "",
       })),
-    problems: detail.problems.map((problem) => ({
-      key: keyFor(
-        previous?.problems,
-        (row) => row.problemId === problem.problemId,
-      ),
-      problemId: problem.problemId,
-      customer: ref(problem.customerId),
-      content: problem.content,
-      status: problem.status,
-    })),
-    plans: detail.plans.map((plan) => ({
-      key: keyFor(previous?.plans, (row) => row.planId === plan.planId),
-      planId: plan.planId,
-      customer: ref(plan.customerId),
-      plannedDate: plan.plannedDate ?? "",
-      content: plan.content,
-    })),
+    // 서버도 sortOrder 순으로 돌려주지만 방문기록과 같이 화면이 한 번 더 정렬한다.
+    // 정렬은 안정적이라 sortOrder 가 같으면 서버가 준 순서(식별자 순)가 유지된다.
+    problems: [...detail.problems]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((problem) => ({
+        key: keyFor(
+          previous?.problems,
+          (row) => row.problemId === problem.problemId,
+        ),
+        problemId: problem.problemId,
+        customer: ref(problem.customerId),
+        content: problem.content,
+        status: problem.status,
+      })),
+    plans: [...detail.plans]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((plan) => ({
+        key: keyFor(previous?.plans, (row) => row.planId === plan.planId),
+        planId: plan.planId,
+        customer: ref(plan.customerId),
+        plannedDate: plan.plannedDate ?? "",
+        content: plan.content,
+      })),
   };
 }
 
@@ -204,17 +210,19 @@ export function toSaveBody(rows: FormRows): ReportSaveBody {
       result: orNull(row.result),
       sortOrder: index + 1,
     })),
-    problems: rows.problems.map((row) => ({
+    problems: rows.problems.map((row, index) => ({
       ...(row.problemId === undefined ? {} : { problemId: row.problemId }),
       customerId: row.customer?.customerId ?? null,
       content: row.content.trim(),
       status: row.status,
+      sortOrder: index + 1,
     })),
-    plans: rows.plans.map((row) => ({
+    plans: rows.plans.map((row, index) => ({
       ...(row.planId === undefined ? {} : { planId: row.planId }),
       customerId: row.customer?.customerId ?? null,
       plannedDate: orNull(row.plannedDate),
       content: row.content.trim(),
+      sortOrder: index + 1,
     })),
   };
 }

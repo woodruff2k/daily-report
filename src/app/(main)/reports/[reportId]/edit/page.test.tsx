@@ -35,7 +35,13 @@ function detail(overrides: Record<string, unknown> = {}) {
     submittedAt: null,
     visits: [visit(100, 5, "에이상사")],
     problems: [
-      { problemId: 200, customerId: 6, content: "납기 문의", status: "OPEN" },
+      {
+        problemId: 200,
+        customerId: 6,
+        content: "납기 문의",
+        status: "OPEN",
+        sortOrder: 1,
+      },
     ],
     plans: [
       {
@@ -43,6 +49,7 @@ function detail(overrides: Record<string, unknown> = {}) {
         customerId: 7,
         plannedDate: "2026-10-06",
         content: "견적 발송",
+        sortOrder: 1,
       },
     ],
     ...overrides,
@@ -527,6 +534,7 @@ describe("SCR-210 — 검토에서 고친 것 (#13)", () => {
             customerId: null,
             content: "납기 문의",
             status: "OPEN",
+            sortOrder: 1,
           },
         ],
       }),
@@ -539,5 +547,156 @@ describe("SCR-210 — 검토에서 고친 것 (#13)", () => {
     await screen.findByText("임시저장했습니다.");
 
     expect(screen.getByLabelText("과제 1행 고객 검색")).toHaveValue("비마");
+  });
+});
+
+/**
+ * 과제·계획도 방문기록처럼 화면 순서를 sortOrder 로 보낸다 (이슈 #85).
+ *
+ * **해당 TC 는 없다.** 가장 가까운 것은 TC-PRB-01·TC-PLN-01(다중 행 저장)이다.
+ * 화면에는 행을 중간에 끼우는 조작이 없어 "중간 삽입" 은 report-form.test.ts 가
+ * 변환 함수로 덮는다.
+ */
+describe("SCR-210 — 과제·계획 sortOrder (#85)", () => {
+  const problem = (id: number, sortOrder: number, content: string) => ({
+    problemId: id,
+    customerId: null,
+    content,
+    status: "OPEN",
+    sortOrder,
+  });
+  const plan = (id: number, sortOrder: number, content: string) => ({
+    planId: id,
+    customerId: null,
+    plannedDate: "2026-10-06",
+    content,
+    sortOrder,
+  });
+
+  it("저장 본문의 과제·계획에 sortOrder 가 1부터 화면 순서대로 담긴다", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi(
+      undefined,
+      detail({
+        problems: [problem(1, 1, "가"), problem(2, 2, "나")],
+        plans: [plan(1, 1, "다"), plan(2, 2, "라")],
+      }),
+    );
+    await openForm();
+
+    await user.click(screen.getByRole("button", { name: "과제/상담 행 추가" }));
+    await user.type(screen.getByLabelText("과제 3행 내용"), "마");
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    await screen.findByRole("status");
+
+    const [put] = writes(fetchMock);
+    expect(put.body.problems).toEqual([
+      {
+        problemId: 1,
+        customerId: null,
+        content: "가",
+        status: "OPEN",
+        sortOrder: 1,
+      },
+      {
+        problemId: 2,
+        customerId: null,
+        content: "나",
+        status: "OPEN",
+        sortOrder: 2,
+      },
+      { customerId: null, content: "마", status: "OPEN", sortOrder: 3 },
+    ]);
+    expect(put.body.plans).toEqual([
+      {
+        planId: 1,
+        customerId: null,
+        plannedDate: "2026-10-06",
+        content: "다",
+        sortOrder: 1,
+      },
+      {
+        planId: 2,
+        customerId: null,
+        plannedDate: "2026-10-06",
+        content: "라",
+        sortOrder: 2,
+      },
+    ]);
+  });
+
+  it("행을 지우고 저장하면 sortOrder 가 빈 번호 없이 1부터 다시 매겨진다", async () => {
+    const user = userEvent.setup();
+    // 서버 값이 1,2,3 이어도 가운데를 지우면 1,2 가 된다(1,3 이 아니다).
+    const fetchMock = mockApi(
+      undefined,
+      detail({
+        problems: [problem(1, 1, "A"), problem(2, 2, "B"), problem(3, 3, "C")],
+        plans: [plan(1, 1, "P"), plan(2, 2, "Q"), plan(3, 3, "R")],
+      }),
+    );
+    await openForm();
+
+    await user.click(screen.getByRole("button", { name: "과제 2행 삭제" }));
+    await user.click(screen.getByRole("button", { name: "계획 2행 삭제" }));
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    await screen.findByRole("status");
+
+    const [put] = writes(fetchMock);
+    expect(
+      put.body.problems.map((p: { problemId: number; sortOrder: number }) => [
+        p.problemId,
+        p.sortOrder,
+      ]),
+    ).toEqual([
+      [1, 1],
+      [3, 2],
+    ]);
+    expect(
+      put.body.plans.map((p: { planId: number; sortOrder: number }) => [
+        p.planId,
+        p.sortOrder,
+      ]),
+    ).toEqual([
+      [1, 1],
+      [3, 2],
+    ]);
+  });
+
+  it("상세를 불러오면 sortOrder 순서로 보이고, 값에 틈이 있어도 1부터 다시 매겨 저장한다", async () => {
+    const user = userEvent.setup();
+    // 서버가 sortOrder 순으로 주므로 응답 순서와 같다. 틈(5, 9)은 저장 때 메워진다.
+    const fetchMock = mockApi(
+      undefined,
+      detail({
+        problems: [
+          problem(7, 1, "첫째"),
+          problem(5, 5, "둘째"),
+          problem(6, 9, "셋째"),
+        ],
+        plans: [plan(9, 2, "하나"), plan(8, 4, "둘")],
+      }),
+    );
+    await openForm();
+
+    expect(screen.getByLabelText("과제 1행 내용")).toHaveValue("첫째");
+    expect(screen.getByLabelText("과제 2행 내용")).toHaveValue("둘째");
+    expect(screen.getByLabelText("과제 3행 내용")).toHaveValue("셋째");
+    expect(screen.getByLabelText("계획 1행 내용")).toHaveValue("하나");
+    expect(screen.getByLabelText("계획 2행 내용")).toHaveValue("둘");
+
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    await screen.findByRole("status");
+    const [put] = writes(fetchMock);
+    expect(
+      put.body.problems.map((p: { problemId: number; sortOrder: number }) => [
+        p.problemId,
+        p.sortOrder,
+      ]),
+    ).toEqual([
+      [7, 1],
+      [5, 2],
+      [6, 3],
+    ]);
   });
 });

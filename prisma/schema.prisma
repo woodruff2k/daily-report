@@ -147,6 +147,7 @@ model ReportProblem {
   customerId BigInt?       @map("customer_id") // 선택
   content    String
   status     ProblemStatus @default(OPEN)
+  sortOrder  Int           @default(0) @map("sort_order")
   createdAt  DateTime      @default(now()) @map("created_at")
 
   report   DailyReport @relation(fields: [reportId], references: [reportId])
@@ -161,6 +162,7 @@ model ReportPlan {
   customerId  BigInt?   @map("customer_id") // 선택
   plannedDate DateTime? @map("planned_date") @db.Date // 선택
   content     String
+  sortOrder   Int       @default(0) @map("sort_order")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   report   DailyReport @relation(fields: [reportId], references: [reportId])

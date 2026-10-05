@@ -79,6 +79,7 @@ export const problemInputSchema = z.object({
   content,
   // 화면정의서 SCR-210: 상태는 선택이며 기본 OPEN.
   status: z.enum(["OPEN", "CLOSED"]).default("OPEN"),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
 export const planInputSchema = z.object({
@@ -86,12 +87,30 @@ export const planInputSchema = z.object({
   customerId: optionalCustomerId,
   plannedDate: optionalDate,
   content,
+  sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
 /** 같은 식별자를 두 번 보내면 한 행이 두 번 갱신된다. 모호한 요청이므로 거부한다. */
 function hasUniqueIds<T>(rows: T[], pick: (row: T) => number | undefined) {
   const ids = rows.map(pick).filter((id): id is number => id !== undefined);
   return new Set(ids).size === ids.length;
+}
+
+/**
+ * `sortOrder` 는 **전부 보내거나 전부 생략해야** 한다.
+ *
+ * 서버는 생략된 행에 배열 순서(`index + 1`)를 넣는다. 그래서 일부만 보내면 두
+ * 체계가 한 배열에서 섞이고 값이 충돌한다 — `[{content:"D", sortOrder:2},
+ * {problemId:200, content:"A"}]` 는 D 가 2(명시), A 도 2(index+1)가 되어 동점이
+ * 되고, 2차 키(식별자 오름차순)로 갈려 **요청 순서와 반대로** A·D 가 돌아온다.
+ * 배열 순서도 아니고 보낸 숫자도 아닌 제3의 순서가 나오므로 모호한 요청이다.
+ *
+ * 같은 숫자를 일부러 두 번 보내는 것은 막지 않는다 — 그때 동점 처리(식별자
+ * 오름차순)는 정의돼 있고 호출자가 그렇게 요청한 것이다.
+ */
+function sortOrderAllOrNone<T extends { sortOrder?: number }>(rows: T[]) {
+  const given = rows.filter((row) => row.sortOrder !== undefined).length;
+  return given === 0 || given === rows.length;
 }
 
 /** 일일보고 생성. (API 명세 3.2) */
@@ -113,15 +132,18 @@ export const reportSaveSchema = z.object({
   visits: z
     .array(visitInputSchema)
     .max(MAX_ROWS)
-    .refine((rows) => hasUniqueIds(rows, (row) => row.visitId)),
+    .refine((rows) => hasUniqueIds(rows, (row) => row.visitId))
+    .refine(sortOrderAllOrNone),
   problems: z
     .array(problemInputSchema)
     .max(MAX_ROWS)
-    .refine((rows) => hasUniqueIds(rows, (row) => row.problemId)),
+    .refine((rows) => hasUniqueIds(rows, (row) => row.problemId))
+    .refine(sortOrderAllOrNone),
   plans: z
     .array(planInputSchema)
     .max(MAX_ROWS)
-    .refine((rows) => hasUniqueIds(rows, (row) => row.planId)),
+    .refine((rows) => hasUniqueIds(rows, (row) => row.planId))
+    .refine(sortOrderAllOrNone),
 });
 
 export type ReportCreate = z.infer<typeof reportCreateSchema>;
