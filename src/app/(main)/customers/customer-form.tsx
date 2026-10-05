@@ -67,6 +67,12 @@ interface Props {
  * 담당자를 검증한다. 새로 다른 비활성 사원을 고를 수는 없다(목록에 없다).
  *
  * PUT 은 전체 교체라 모든 필드를 함께 보낸다.
+ *
+ * 수정·비활성화는 담당 영업과 그 직속 상급자만 할 수 있다. (이슈 #68) 상세 응답에는
+ * `editable` 이 없고 수정 화면은 수정하려는 사람이 들어오므로, 막힌 경우는
+ * 저장·비활성화의 403 에서 처리한다. 화면이 미리 막는 것은 접근통제가 아니고
+ * 실제 차단은 서버가 한다. 등록은 남을 담당자로 지정해도 되지만 그러면 등록자는
+ * 그 고객을 바로 고칠 수 없다(의도) — 목록의 비활성 [수정] 이 그 이유를 보여준다.
  */
 export default function CustomerForm({
   customerId,
@@ -161,6 +167,7 @@ export default function CustomerForm({
       }
       router.push("/customers");
     } catch (caught) {
+      // 수정의 403 은 범위(남의 고객)다. 등록의 403 은 역할이라 기본 문장.
       setError(report(caught, "저장할 수 없습니다."));
       setSubmitting(false);
     }

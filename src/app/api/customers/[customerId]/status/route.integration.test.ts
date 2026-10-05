@@ -9,7 +9,7 @@ import {
   createReport,
   createVisit,
 } from "@/test/integration/factories";
-import { call } from "@/test/integration/http";
+import { type Actor, call } from "@/test/integration/http";
 
 describe("PATCH /api/customers/{id}/status (실제 DB)", () => {
   it("TC-CUS-04: INACTIVE 로 바꾸면 200 이고 행은 남아 있으며 방문기록 참조도 유지된다", async () => {
@@ -73,5 +73,60 @@ describe("PATCH /api/customers/{id}/status (실제 DB)", () => {
       where: { customerId: customer.customerId },
     });
     expect(row.status).toBe("ACTIVE");
+  });
+});
+
+describe("PATCH /api/customers/{id}/status 쓰기 범위 (실제 DB) — TC-SEC-08", () => {
+  const patch = (as: Actor, customerId: bigint) =>
+    call(PATCH, "PATCH", `/api/customers/${customerId}/status`, {
+      as,
+      body: { status: "INACTIVE" },
+      params: { customerId },
+    });
+
+  async function setup() {
+    const manager = await createRep({ role: "MANAGER" });
+    const owner = await createRep({ managerId: manager.repId });
+    const otherManager = await createRep({ role: "MANAGER" });
+    const stranger = await createRep({ managerId: otherManager.repId });
+    return {
+      manager,
+      owner,
+      otherManager,
+      stranger,
+      customer: await createCustomer(owner.repId),
+    };
+  }
+
+  it("담당 영업 본인과 직속 상급자는 200", async () => {
+    const { owner, manager, customer } = await setup();
+    const second = await createCustomer(owner.repId);
+
+    expect((await patch(owner, customer.customerId)).status).toBe(200);
+    expect((await patch(manager, second.customerId)).status).toBe(200);
+  });
+
+  it("무관한 영업사원·다른 팀 상급자는 403 이고 상태가 바뀌지 않는다", async () => {
+    const { stranger, otherManager, customer } = await setup();
+
+    for (const actor of [stranger, otherManager]) {
+      expect((await patch(actor, customer.customerId)).status).toBe(403);
+    }
+    const row = await prisma.customer.findUniqueOrThrow({
+      where: { customerId: customer.customerId },
+    });
+    expect(row.status).toBe("ACTIVE");
+  });
+
+  it("담당 영업이 null 인 고객은 403, 없는 고객은 404", async () => {
+    const { owner, manager, customer } = await setup();
+    await prisma.customer.update({
+      where: { customerId: customer.customerId },
+      data: { assignedRepId: null },
+    });
+
+    expect((await patch(owner, customer.customerId)).status).toBe(403);
+    expect((await patch(manager, customer.customerId)).status).toBe(403);
+    expect((await patch(owner, 99999n)).status).toBe(404);
   });
 });

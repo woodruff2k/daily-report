@@ -212,6 +212,19 @@ describe("SCR-410 등록 — #16", () => {
     );
   });
 
+  it("등록의 403 은 역할 메시지다 (범위 메시지가 아니다)", async () => {
+    mockApi(() => fail(403, "FORBIDDEN"));
+    render(<CustomerForm />);
+    const user = userEvent.setup();
+    await fillRequired(user);
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("영업사원·상급자만 사용할 수 있습니다");
+    expect(alert).not.toHaveTextContent("담당 영업과 그 상급자만");
+  });
+
   it("401 이면 토큰을 지우고 로그인으로 보낸다", async () => {
     mockApi(() => fail(401, "UNAUTHORIZED"));
     render(<CustomerForm />);
@@ -410,5 +423,67 @@ describe("SCR-410 수정 — #16", () => {
     );
     expect(writes(fetchMock)).toHaveLength(0);
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+// #68: 서버가 범위 403 에 전용 코드(CUSTOMER_WRITE_FORBIDDEN)를 준다. 코드로 가른다 —
+// 호출 지점으로 가르면 새 호출부가 생길 때 조용히 틀린 문구가 나간다.
+describe("SCR-410 수정·비활성화의 403 — #68", () => {
+  function renderEdit() {
+    render(
+      <CustomerForm
+        customerId={1}
+        initialValues={EDIT_VALUES}
+        initialAssignedRepName="홍길동"
+      />,
+    );
+  }
+
+  it("저장(PUT) 403 이면 범위 메시지를 보여주고 역할 메시지는 아니다", async () => {
+    mockApi(() =>
+      fail(
+        403,
+        "CUSTOMER_WRITE_FORBIDDEN",
+        "이 고객을 수정할 권한이 없습니다.",
+      ),
+    );
+    renderEdit();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "담당 영업과 그 상급자만 수정할 수 있습니다",
+    );
+    expect(alert).not.toHaveTextContent("영업사원·상급자만 사용할 수 있습니다");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("비활성화(PATCH) 403 이면 같은 범위 메시지를 보여주고 이동하지 않는다", async () => {
+    mockApi(() => fail(403, "CUSTOMER_WRITE_FORBIDDEN"));
+    renderEdit();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "비활성화" }));
+    await user.click(await screen.findByRole("button", { name: "확인" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "담당 영업과 그 상급자만 수정할 수 있습니다",
+    );
+    expect(alert).not.toHaveTextContent("영업사원·상급자만 사용할 수 있습니다");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("수정 화면이라도 담당 영업 목록(options)의 403 은 역할 메시지다 (ADMIN)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(fail(403, "FORBIDDEN")),
+    );
+    renderEdit();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("영업사원·상급자만 사용할 수 있습니다");
+    expect(alert).not.toHaveTextContent("담당 영업과 그 상급자만");
   });
 });

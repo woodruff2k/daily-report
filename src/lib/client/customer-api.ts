@@ -18,9 +18,17 @@ export interface CustomerListItem {
   assignedRepId: number | null;
   assignedRepName: string | null;
   status: CustomerStatus;
+  /**
+   * 호출자가 이 고객을 수정·비활성화할 수 있는지. 서버가 계산한다. (이슈 #68)
+   * 상급자 판정에는 담당 사원의 managerId 가 필요한데 목록 응답에 없으므로
+   * 화면이 `assignedRepId` 로 다시 계산하지 않는다 — 상급자 버튼이 사라진다.
+   * **접근통제가 아니다.** 서버가 PUT·PATCH 에서 다시 막는다.
+   */
+  editable: boolean;
 }
 
-export interface CustomerDetail extends CustomerListItem {
+/** 상세 응답에는 `editable` 이 없다. 상세는 전사 공개다. */
+export interface CustomerDetail extends Omit<CustomerListItem, "editable"> {
   email: string | null;
   address: string | null;
   createdAt: string;
@@ -124,7 +132,19 @@ export function changeCustomerStatus(
   });
 }
 
+/**
+ * 403 의 두 가지 사유에 대응하는 문장.
+ *
+ * 화면을 숨기는 것은 접근통제가 아니다 — 서버가 이미 막고 있고, 이 문장은 빈
+ * 화면 대신 이유를 알려줄 뿐이다.
+ */
+export const ROLE_FORBIDDEN_MESSAGE =
+  "고객 마스터는 영업사원·상급자만 사용할 수 있습니다.";
+export const SCOPE_FORBIDDEN_MESSAGE =
+  "담당 영업과 그 상급자만 수정할 수 있습니다.";
+
 const CODE_MESSAGE: Record<string, string> = {
+  CUSTOMER_WRITE_FORBIDDEN: SCOPE_FORBIDDEN_MESSAGE,
   ASSIGNED_REP_NOT_FOUND: "담당 영업을 찾을 수 없습니다. 다시 선택하세요.",
   ASSIGNED_REP_INACTIVE:
     "비활성 상태인 사원은 담당 영업으로 지정할 수 없습니다. 다른 사원을 선택하세요.",
@@ -133,19 +153,19 @@ const CODE_MESSAGE: Record<string, string> = {
   NOT_FOUND: "고객을 찾을 수 없습니다.",
 };
 
-/**
- * 서버 오류를 사용자가 읽을 문장으로 바꾼다.
- *
- * 403 은 코드보다 상태로 가른다. 고객 API 는 ADMIN 을 막으므로(명세 1.5)
- * 관리자가 들어오면 여기에 온다. 화면을 숨기는 것은 접근통제가 아니며 서버가
- * 이미 막고 있다 — 이 문장은 빈 화면 대신 이유를 알려줄 뿐이다.
- */
 export function customerErrorMessage(caught: unknown, fallback: string) {
   if (!(caught instanceof ApiClientError)) {
     return fallback;
   }
-  if (caught.status === 403) {
-    return "고객 마스터는 영업사원·상급자만 사용할 수 있습니다.";
+  // 코드를 먼저 본다. 서버가 403 을 두 가지로 나눠 주기 때문이다 —
+  // CUSTOMER_WRITE_FORBIDDEN 은 "남의 고객", 그 밖의 403 은 "역할이 안 맞음".
+  // 호출 지점으로 가르지 않는다. 새 호출부가 생길 때 조용히 틀린 문구가 나간다.
+  const byCode = CODE_MESSAGE[caught.code];
+  if (byCode) {
+    return byCode;
   }
-  return CODE_MESSAGE[caught.code] ?? fallback;
+  if (caught.status === 403) {
+    return ROLE_FORBIDDEN_MESSAGE;
+  }
+  return fallback;
 }

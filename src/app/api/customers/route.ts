@@ -17,7 +17,8 @@ import { customerCreateSchema } from "@/schemas/customer";
 /** 고객 목록. (FR-01, API 명세 5.1) 목록에는 이메일을 담지 않는다. (NFR-04) */
 export async function GET(request: NextRequest) {
   try {
-    assertAnyRole(parseAuthContext(request.headers), CUSTOMER_ROLES);
+    const auth = parseAuthContext(request.headers);
+    assertAnyRole(auth, CUSTOMER_ROLES);
 
     const params = request.nextUrl.searchParams;
     const pageRequest = parsePageRequest(params, CUSTOMER_SORT_FIELDS, {
@@ -31,15 +32,18 @@ export async function GET(request: NextRequest) {
         skip: pageRequest.skip,
         take: pageRequest.take,
         orderBy: pageRequest.orderBy,
-        // 목록 컬럼이 담당 영업 이름이다. 이름만 읽는다.
-        include: { assignedRep: { select: { name: true } } },
+        // 이름은 목록 컬럼이고, repId·managerId 는 `editable` 판정에만 쓴다
+        // (응답에는 담지 않는다). 그 밖의 필드는 읽지 않는다. (NFR-04)
+        include: {
+          assignedRep: { select: { name: true, repId: true, managerId: true } },
+        },
       }),
       prisma.customer.count({ where }),
     ]);
 
     return apiSuccess(
       pageResponse(
-        customers.map(toCustomerListItem),
+        customers.map((customer) => toCustomerListItem(customer, auth)),
         totalElements,
         pageRequest,
       ),
@@ -49,7 +53,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** 고객 등록. (FR-01, API 명세 5.2, TC-CUS-01·02) */
+/**
+ * 고객 등록. (FR-01, API 명세 5.2, TC-CUS-01·02)
+ *
+ * 담당 영업을 누구로 지정하든 허용한다. (이슈 #68) 등록은 남의 데이터를 고치는
+ * 것이 아니라 새 데이터를 더하는 것이고, 상급자가 팀원 몫을 미리 등록하는 것도
+ * 정상 업무다. 남을 담당으로 지정하면 등록자는 그 고객을 바로 수정할 수 없다 —
+ * 수정 범위(`assertCustomerWritable`)는 담당자와 그 상급자뿐이다.
+ */
 export async function POST(request: NextRequest) {
   try {
     assertAnyRole(parseAuthContext(request.headers), CUSTOMER_ROLES);
