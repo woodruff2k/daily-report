@@ -118,3 +118,14 @@ export function resetSalesRepPassword(repId: number) {
     { method: "POST" },
   );
 }
+
+/** 팀 보고 조회의 팀원 선택지. 비활성 팀원도 온다(과거 보고 필터용). (API 명세 6.7) */
+export interface TeamOption {
+  repId: number;
+  name: string;
+  status: RepStatus;
+}
+
+export function listTeamOptions() {
+  return apiFetch<TeamOption[]>("/api/sales-reps/team");
+}

@@ -253,7 +253,17 @@ export default function ReportListPage() {
           {reports.length === 0 ? (
             <TableRow>
               <TableCell colSpan={6}>
-                {loaded ? "조회 결과가 없습니다." : "불러오는 중…"}
+                {/*
+                  조회가 실패한 것은 "결과가 없는" 것이 아니다. 오류 알림 옆에
+                  "조회 결과가 없습니다" 를 붙이면 거짓을 말한다 — 질의가 거절된
+                  것이지 비어 있는 것이 아니다. loaded 만 보면 finally 에서 켜지므로
+                  실패도 "불러왔다" 로 읽힌다.
+                */}
+                {error !== null
+                  ? "조회할 수 없습니다."
+                  : loaded
+                    ? "조회 결과가 없습니다."
+                    : "불러오는 중…"}
               </TableCell>
             </TableRow>
           ) : (
@@ -301,7 +311,14 @@ export default function ReportListPage() {
           이전
         </Button>
         <span>
-          {pageIndex + 1} / {Math.max(totalPages, 1)} 페이지
+          {/*
+            조회가 실패하면 totalPages 는 0 이 되는데 pageIndex 는 그대로 남는다
+            (0 으로 되돌리면 효과가 다시 돌아 같은 실패를 반복한다). 그대로 쓰면
+            "3 / 1 페이지" 처럼 뜻이 없는 값이 보인다. 실패 중에는 쪽수를 감춘다.
+          */}
+          {error !== null
+            ? "-"
+            : `${pageIndex + 1} / ${Math.max(totalPages, 1)} 페이지`}
         </span>
         <Button
           type="button"

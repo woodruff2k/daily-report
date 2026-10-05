@@ -43,6 +43,34 @@ export function listReports(filters: ReportFilters = {}) {
   );
 }
 
+/** 팀 보고 목록 항목. 본인 목록에 작성자가 더해진다. (API 명세 3.6) */
+export interface TeamReportListItem extends ReportListItem {
+  rep: { repId: number; name: string };
+}
+
+export interface TeamReportFilters extends ReportFilters {
+  /** 비우면 팀 전체. 서버에는 쉼표로 이어 붙여 보낸다. */
+  repIds?: number[];
+  customerId?: number | string;
+}
+
+export function listTeamReports(filters: TeamReportFilters = {}) {
+  const { repIds, ...rest } = filters;
+  const base = query(rest);
+  const ids = repIds && repIds.length > 0 ? repIds.join(",") : "";
+  // 쉼표를 %2C 로 보내지 않도록 직접 붙인다(서버는 둘 다 같게 읽지만 명세 표기를 따른다).
+  const extra = ids === "" ? "" : `repIds=${ids}`;
+  const url =
+    base === ""
+      ? extra
+        ? `?${extra}`
+        : ""
+      : extra
+        ? `${base}&${extra}`
+        : base;
+  return apiFetch<PageResponse<TeamReportListItem>>(`/api/reports/team${url}`);
+}
+
 export function createReport(reportDate: string) {
   return apiFetch<{ reportId: number; status: ReportStatus }>("/api/reports", {
     method: "POST",
