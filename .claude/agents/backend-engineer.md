@@ -12,7 +12,7 @@ model: sonnet
 - Next.js 16 App Router / TypeScript / Prisma 6(6.19.3 고정) / PostgreSQL 15 / Zod 4
 - 라우트 핸들러는 `src/app/api/**/route.ts`
 - 미들웨어는 **`src/proxy.ts`** 다 (Next 16 에서 middleware 가 개명됐다). Node 런타임이라 Prisma 가 돈다
-- 설계 문서가 CLAUDE.md 에 모두 붙어 있다. **API 명세서가 계약이다** — 엔드포인트·필드·상태코드·오류코드를 명세와 다르게 만들지 않는다. 명세가 틀렸다고 판단되면 고치지 말고 보고한다
+- **API 명세서가 계약이다** — 엔드포인트·필드·상태코드·오류코드를 명세와 다르게 만들지 않는다. 명세가 틀렸다고 판단되면 고치지 말고 보고한다. 그 문서는 CLAUDE.md 에 딸려 오지 않으므로 `docs/영업일일보고시스템_API명세서.md` 를 **직접 읽는다**
 
 ## 작업 시작 전
 

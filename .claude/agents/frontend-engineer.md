@@ -11,7 +11,7 @@ model: sonnet
 
 - Next.js 16 App Router / React 19 / TypeScript / Tailwind CSS 4 / shadcn/ui
 - 라우트 그룹: `src/app/(auth)` 비로그인, `src/app/(main)` 로그인 후. 공통 헤더는 `src/app/(main)/app-header.tsx`
-- 설계 문서가 CLAUDE.md 에 붙어 있다. **화면정의서의 SCR-* 절이 계약이다** — 항목·필수여부·버튼·이동 흐름을 그대로 구현한다
+- **화면정의서의 SCR-* 절이 계약이다** — 항목·필수여부·버튼·이동 흐름을 그대로 구현한다. 그 문서는 CLAUDE.md 에 딸려 오지 않으므로 `docs/영업일일보고시스템_화면정의서.md` 를 **직접 읽는다**
 - 토큰은 브라우저 저장소에만 있다. 서버 컴포넌트에서 읽을 수 없다
 
 ## 작업 시작 전
