@@ -97,3 +97,12 @@ export function mapReportWriteError(error: unknown): unknown {
 
   return error;
 }
+
+/** 댓글 수정·삭제에서 대상 없음(P2025)을 404 로 바꾼다. 읽은 뒤 삭제된 경우다. */
+export function mapCommentWriteError(error: unknown): unknown {
+  if (isRecordNotFound(error)) {
+    return new NotFoundError("댓글을 찾을 수 없습니다.");
+  }
+
+  return error;
+}
