@@ -200,7 +200,7 @@ export default function ReportDetailPage() {
             ) : (
               detail.problems.map((problem) => (
                 <TableRow key={problem.problemId}>
-                  <TableCell>{problem.customer?.customerName}</TableCell>
+                  <TableCell>{problem.customer?.customerName ?? "-"}</TableCell>
                   <TableCell className="whitespace-pre-wrap">
                     {problem.content}
                   </TableCell>
@@ -230,7 +230,7 @@ export default function ReportDetailPage() {
             ) : (
               detail.plans.map((plan) => (
                 <TableRow key={plan.planId}>
-                  <TableCell>{plan.customer?.customerName}</TableCell>
+                  <TableCell>{plan.customer?.customerName ?? "-"}</TableCell>
                   <TableCell>{plan.plannedDate ?? "-"}</TableCell>
                   <TableCell className="whitespace-pre-wrap">
                     {plan.content}
