@@ -81,6 +81,28 @@ export function toReportListItem(record: ReportListRecord): ReportListItem {
 }
 
 /**
+ * 팀 목록 레코드. 본인 목록과 달리 작성자를 담는다. (API 명세 3.6, SCR-300)
+ *
+ * 작성자는 `repId`·`name` 만 읽는다. 이메일·사번은 팀 목록이 쓰지 않는다. (NFR-04)
+ */
+export interface TeamReportListRecord extends ReportListRecord {
+  rep: { repId: bigint; name: string };
+}
+
+export interface TeamReportListItem extends ReportListItem {
+  rep: { repId: number; name: string };
+}
+
+export function toTeamReportListItem(
+  record: TeamReportListRecord,
+): TeamReportListItem {
+  return {
+    ...toReportListItem(record),
+    rep: { repId: toJsonId(record.rep.repId), name: record.rep.name },
+  };
+}
+
+/**
  * 상세·저장 응답. (API 명세 3.3, 3.4)
  *
  * Prisma 모델을 그대로 반환하지 않고 필드를 명시적으로 나열한다. 컬럼이 늘어도

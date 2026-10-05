@@ -67,6 +67,12 @@ export const REPORT_LIST_RECORD = {
   _count: { visits: 3, comments: 2 },
 };
 
+/** 팀 목록용 레코드. 작성자는 repId·name 만 읽는다. */
+export const TEAM_REPORT_LIST_RECORD = {
+  ...REPORT_LIST_RECORD,
+  rep: { repId: 1n, name: "홍길동" },
+};
+
 /** PUT 요청 본문. 기존 행(visitId 100 등)을 수정하고 새 행을 더한다. */
 export const SAVE_BODY = {
   visits: [
