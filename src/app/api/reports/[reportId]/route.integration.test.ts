@@ -2,6 +2,7 @@
 // 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-05, TC-SUB-03,
 //          TC-CUS-05(비활성 고객의 과거 방문기록 유지), TC-NFR-01, TC-SEC-06
 // 이슈 #85(과제·계획 순서): 해당 TC 없음. 가장 가까운 것은 TC-PRB-01·TC-PLN-01(다중 저장).
+// 이슈 #87(과제·계획의 고객 이름): 해당 TC 없음. 가장 가까운 것은 TC-RPT-05·TC-SEC-06.
 // 이슈 #7: PUT 전체 교체의 원자성, status=DRAFT 조건부 UPDATE 의 직렬화
 import type { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
@@ -100,6 +101,88 @@ describe("GET /api/reports/{id} (실제 DB)", () => {
       rep.passwordHash,
     ]) {
       expect(result.raw).not.toContain(secret);
+    }
+  });
+
+  it("이슈 #87: 과제·계획이 고객 이름을 담고, 고객이 없으면 null 이며, 비활성 고객도 이름이 온다", async () => {
+    const rep = await createRep();
+    const active = await createCustomer(rep.repId);
+    const inactive = await createCustomer(rep.repId, { status: "INACTIVE" });
+    const report = await createReport(rep.repId);
+    const base = { reportId: report.reportId };
+    await prisma.reportProblem.createMany({
+      data: [
+        {
+          ...base,
+          customerId: active.customerId,
+          content: "활성 과제",
+          sortOrder: 1,
+        },
+        { ...base, customerId: null, content: "무고객 과제", sortOrder: 2 },
+        {
+          ...base,
+          customerId: inactive.customerId,
+          content: "비활성 과제",
+          sortOrder: 3,
+        },
+      ],
+    });
+    await prisma.reportPlan.createMany({
+      data: [
+        {
+          ...base,
+          customerId: active.customerId,
+          content: "활성 계획",
+          sortOrder: 1,
+        },
+        { ...base, customerId: null, content: "무고객 계획", sortOrder: 2 },
+        {
+          ...base,
+          customerId: inactive.customerId,
+          content: "비활성 계획",
+          sortOrder: 3,
+        },
+      ],
+    });
+
+    const result = await getReport(report.reportId, rep);
+
+    expect(result.status).toBe(200);
+    const activeRef = {
+      customerId: Number(active.customerId),
+      customerName: active.customerName,
+    };
+    const inactiveRef = {
+      customerId: Number(inactive.customerId),
+      customerName: inactive.customerName,
+    };
+    const data = result.body.data as {
+      problems: { customer: unknown }[];
+      plans: { customer: unknown }[];
+    };
+    expect(data.problems.map((row) => row.customer)).toEqual([
+      activeRef,
+      null,
+      inactiveRef,
+    ]);
+    expect(data.plans.map((row) => row.customer)).toEqual([
+      activeRef,
+      null,
+      inactiveRef,
+    ]);
+    expect(data.problems[0]).not.toHaveProperty("customerId");
+    for (const secret of [
+      active.phone!,
+      active.email!,
+      active.address!,
+      inactive.phone!,
+      inactive.email!,
+      inactive.address!,
+    ]) {
+      expect(result.raw).not.toContain(secret);
+    }
+    for (const key of ['"email"', '"address"', '"phone"']) {
+      expect(result.raw).not.toContain(key);
     }
   });
 

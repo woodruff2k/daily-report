@@ -76,6 +76,21 @@ describe("toReportDetail", () => {
   });
 });
 
+describe("toReportDetail 과제·계획의 고객 (이슈 #87)", () => {
+  // 이슈 #87. 해당 TC 없음(가장 가까운 것: TC-RPT-05).
+  it("고객이 있는 행은 customer 객체를, 없는 행은 null 을 담고 customerId 를 따로 담지 않는다", () => {
+    const detail = toReportDetail(SUBMITTED_REPORT);
+
+    expect(detail.problems[0].customer).toEqual({
+      customerId: 5,
+      customerName: "테스트고객",
+    });
+    expect(detail.plans[0].customer).toBeNull();
+    expect(detail.problems[0]).not.toHaveProperty("customerId");
+    expect(detail.plans[0]).not.toHaveProperty("customerId");
+  });
+});
+
 describe("assertReportViewable — TC-SEC-01", () => {
   it("작성자 본인은 작성중 보고도 볼 수 있다", () => {
     expect(() => assertReportViewable(owner, REPORT)).not.toThrow();

@@ -90,7 +90,7 @@ export function CustomerPicker({
   if (value !== null) {
     return (
       <div className="flex items-center gap-2 text-sm">
-        <span>{value.customerName ?? `고객 #${value.customerId}`}</span>
+        <span>{value.customerName}</span>
         <Button
           type="button"
           variant="ghost"

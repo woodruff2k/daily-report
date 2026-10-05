@@ -38,14 +38,28 @@ function detail(overrides: Record<string, unknown> = {}) {
       },
     ],
     problems: [
-      { problemId: 200, customerId: 6, content: "납기 문의", status: "OPEN" },
+      {
+        problemId: 200,
+        customer: { customerId: 6, customerName: "비에이상사" },
+        content: "납기 문의",
+        status: "OPEN",
+        sortOrder: 1,
+      },
+      {
+        problemId: 201,
+        customer: null,
+        content: "내부 과제",
+        status: "OPEN",
+        sortOrder: 2,
+      },
     ],
     plans: [
       {
         planId: 300,
-        customerId: 7,
+        customer: { customerId: 7, customerName: "씨상사" },
         plannedDate: "2026-10-06",
         content: "견적 발송",
+        sortOrder: 1,
       },
     ],
     ...overrides,
@@ -91,11 +105,6 @@ function mockApi(handler: Handler = () => undefined, report = detail()) {
     if (url.pathname === "/api/reports/10") return Promise.resolve(ok(report));
     if (url.pathname === "/api/reports/10/comments")
       return Promise.resolve(ok(THREADS));
-    const one = url.pathname.match(/^\/api\/customers\/(\d+)$/);
-    if (one)
-      return Promise.resolve(
-        ok({ customerId: Number(one[1]), customerName: `고객${one[1]}` }),
-      );
     return Promise.resolve(fail(404, "NOT_FOUND"));
   });
 }
@@ -117,7 +126,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("SCR-220 일일보고 상세·조회 — #14", () => {
-  it("방문·과제·계획을 읽기 전용으로 보이고 과제·계획의 고객 이름을 채운다", async () => {
+  it("방문·과제·계획을 읽기 전용으로 보이고 과제·계획의 고객 이름이 첫 렌더에 보인다", async () => {
     login(MANAGER);
     mockApi();
     render(<ReportDetailPage />);
@@ -131,49 +140,43 @@ describe("SCR-220 일일보고 상세·조회 — #14", () => {
     const visits = screen.getByRole("table", { name: "방문 기록" });
     expect(within(visits).getByText("에이상사")).toBeInTheDocument();
     expect(within(visits).queryByRole("textbox")).not.toBeInTheDocument();
-    // 과제·계획 응답에는 이름이 없다.
+    // 이름은 응답에 들어 있다. 뒤에서 채우는 단계가 없어 await 없이 바로 보인다.
     const problems = screen.getByRole("table", { name: "과제/상담" });
-    expect(await within(problems).findByText("고객6")).toBeInTheDocument();
+    expect(within(problems).getByText("비에이상사")).toBeInTheDocument();
     const plans = screen.getByRole("table", { name: "내일 할 일" });
-    expect(await within(plans).findByText("고객7")).toBeInTheDocument();
+    expect(within(plans).getByText("씨상사")).toBeInTheDocument();
   });
 
-  it("이름 조회가 끝나지 않아도 보고 내용은 먼저 보인다", async () => {
+  // 이슈 #87: 과제·계획 응답이 고객 이름을 직접 준다. 이름 조회(GET /api/customers/{id})를
+  // 걷어낸 것이 목적이다. 해당 TC 는 없다(화면 쪽 회귀 방지).
+  it("과제·계획에 고객이 있어도 GET /api/customers/{id} 를 부르지 않는다", async () => {
     login(MANAGER);
-    mockApi((url) =>
-      /^\/api\/customers\/\d+$/.test(url.pathname)
-        ? new Promise<Response>(() => {}) // 영원히 끝나지 않는다
-        : undefined,
-    );
+    const fetchMock = mockApi();
     render(<ReportDetailPage />);
+    await screen.findByText("방문내용100");
+    const problems = screen.getByRole("table", { name: "과제/상담" });
+    expect(within(problems).getByText("비에이상사")).toBeInTheDocument();
 
-    expect(await screen.findByText("방문내용100")).toBeInTheDocument();
-    expect(screen.getByText("납기 문의")).toBeInTheDocument();
-    expect(screen.getByText("고객 #6")).toBeInTheDocument();
-    expect(screen.getByText("고객 #7")).toBeInTheDocument();
+    const paths = fetchMock.mock.calls.map(
+      ([input]) => new URL(String(input), "http://localhost").pathname,
+    );
+    // `/api/customers/{id}`(상세)만 본다. `/api/customers?keyword=`(목록)는 고객
+    // 피커가 검색할 때 쓰는 정상 호출이므로 여기서 막으면 제목과 뜻이 달라진다.
+    expect(paths.some((path) => /^\/api\/customers\/\d+$/.test(path))).toBe(
+      false,
+    );
   });
 
-  it("이름 조회가 실패하면 그 칸만 식별자로 둔다", async () => {
+  it("관련 고객이 null 인 행은 이름 칸이 비어 있고 오류가 아니다", async () => {
     login(MANAGER);
-    mockApi((url) =>
-      /^\/api\/customers\/\d+$/.test(url.pathname)
-        ? fail(500, "INTERNAL")
-        : undefined,
-    );
+    mockApi();
     render(<ReportDetailPage />);
-    expect(await screen.findByText("고객 #6")).toBeInTheDocument();
-    expect(screen.getByText("고객 #7")).toBeInTheDocument();
-  });
+    await screen.findByText("내부 과제");
 
-  it("이름 조회가 401 이면 삼키지 않고 로그인으로 보낸다", async () => {
-    login(MANAGER);
-    mockApi((url) =>
-      /^\/api\/customers\/\d+$/.test(url.pathname)
-        ? fail(401, "UNAUTHORIZED")
-        : undefined,
-    );
-    render(<ReportDetailPage />);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+    const row = screen.getByText("내부 과제").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).toBeEmptyDOMElement();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("SUBMITTED 보고에는 [수정] 이 없다", async () => {
@@ -278,8 +281,6 @@ describe("SCR-220 일일보고 상세·조회 — #14", () => {
         return Promise.resolve(ok(detail()));
       if (url.pathname === "/api/reports/11")
         return new Promise<Response>(() => {});
-      if (/^\/api\/customers\/\d+$/.test(url.pathname))
-        return Promise.resolve(ok({ customerId: 6, customerName: "고객6" }));
       return Promise.resolve(ok([]));
     });
 

@@ -99,18 +99,6 @@ describe("CustomerPicker", () => {
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
-  it("이름을 모르면 식별자를 보인다", () => {
-    render(
-      <CustomerPicker
-        label="고객"
-        value={{ customerId: 9, customerName: null }}
-        onChange={vi.fn()}
-        toMessage={toMessage}
-      />,
-    );
-    expect(screen.getByText("고객 #9")).toBeInTheDocument();
-  });
-
   it("결과가 없으면 안내하고, 실패하면 오류를 알린다", async () => {
     const user = userEvent.setup();
     const fetchMock = vi

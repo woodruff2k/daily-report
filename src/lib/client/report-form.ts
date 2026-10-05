@@ -13,10 +13,10 @@ import {
  * 검증을 대체하지 않는다 — 서버가 400 을 주면 화면이 그 문장을 보여준다.
  */
 
-/** 행이 아닌 한 고객 선택. 이름을 모르면(과제·계획 상세) null. */
+/** 한 고객 선택. 서버가 이름까지 주므로 항상 있다(비활성 고객 포함). */
 export interface CustomerRef {
   customerId: number;
-  customerName: string | null;
+  customerName: string;
 }
 
 // `key` 는 클라이언트 전용이다. 서버로 보내지 않는다(`visitId` 와 다르다).
@@ -59,29 +59,6 @@ export interface FormRows {
   plans: PlanRow[];
 }
 
-/**
- * 뒤늦게 받은 고객 이름을 해당 칸에만 채운다. 다른 상태는 건드리지 않는다 —
- * 이름 조회가 폼을 막지 않고 뒤에서 도는 동안 사용자가 이미 입력하고 있다.
- */
-export function withCustomerName(
-  rows: FormRows,
-  customerId: number,
-  customerName: string,
-): FormRows {
-  const fill = <T extends { customer: CustomerRef | null }>(row: T): T =>
-    row.customer !== null &&
-    row.customer.customerId === customerId &&
-    row.customer.customerName === null
-      ? { ...row, customer: { customerId, customerName } }
-      : row;
-
-  return {
-    visits: rows.visits.map(fill),
-    problems: rows.problems.map(fill),
-    plans: rows.plans.map(fill),
-  };
-}
-
 export const MAX_ROWS = 100;
 const CONTENT_MAX = 2000;
 const RESULT_MAX = 255;
@@ -114,22 +91,13 @@ export function emptyPlan(plannedDate: string): PlanRow {
 }
 
 /**
- * 과제·계획의 고객 이름은 상세에 없어 `names` 에서 찾는다.
+ * 상세 응답을 폼 행으로 바꾼다. 과제·계획의 고객은 응답에 이름까지 들어 있다.
  *
  * `previous` 를 주면 **식별자가 같은 행은 key 를 물려받는다.** 저장할 때마다 새 key
  * 를 발급하면 React 가 모든 행을 떼고 다시 붙여, 아직 고르지 않은 고객 검색어와
  * 포커스가 사라진다 — 임시저장 한 번에 입력 중이던 검색이 날아간다.
  */
-export function toRows(
-  detail: ReportDetail,
-  names: ReadonlyMap<number, string>,
-  previous?: FormRows,
-): FormRows {
-  const ref = (customerId: number | null): CustomerRef | null =>
-    customerId === null
-      ? null
-      : { customerId, customerName: names.get(customerId) ?? null };
-
+export function toRows(detail: ReportDetail, previous?: FormRows): FormRows {
   /** 같은 식별자를 쓰던 행의 key. 없으면 새로 발급한다(새 행이다). */
   function keyFor<T extends { key: string }>(
     rows: T[] | undefined,
@@ -163,7 +131,7 @@ export function toRows(
           (row) => row.problemId === problem.problemId,
         ),
         problemId: problem.problemId,
-        customer: ref(problem.customerId),
+        customer: problem.customer,
         content: problem.content,
         status: problem.status,
       })),
@@ -172,7 +140,7 @@ export function toRows(
       .map((plan) => ({
         key: keyFor(previous?.plans, (row) => row.planId === plan.planId),
         planId: plan.planId,
-        customer: ref(plan.customerId),
+        customer: plan.customer,
         plannedDate: plan.plannedDate ?? "",
         content: plan.content,
       })),

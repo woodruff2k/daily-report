@@ -39,6 +39,7 @@ export const REPORT: ReportDetailRecord = {
       status: "OPEN",
       sortOrder: 1,
       createdAt: new Date("2026-06-20T09:00:00.000Z"),
+      customer: { customerId: 5n, customerName: "테스트고객" },
     },
   ],
   plans: [
@@ -50,6 +51,7 @@ export const REPORT: ReportDetailRecord = {
       content: "견적서 발송",
       sortOrder: 1,
       createdAt: new Date("2026-06-20T09:00:00.000Z"),
+      customer: null,
     },
   ],
 };

@@ -3,7 +3,7 @@ import type { ReportSave } from "@/schemas/report";
 import { ConflictError, ValidationError } from "./errors";
 import type { AuthContext } from "./auth";
 import { assertOwnerOrManager } from "./auth";
-import { toJsonId, toJsonIdOrNull } from "./identifier";
+import { toJsonId } from "./identifier";
 
 /**
  * 일일보고를 다룰 수 있는 역할. (FR-03, SCR-200·210, API 명세 1.5)
@@ -45,8 +45,15 @@ export const REPORT_DETAIL_INCLUDE = {
   // 2차 키(식별자)를 빼면 안 된다. 마이그레이션 직후 기존 행은 sort_order 가
   // 모두 0 이라 1차 키만으로는 전부 동점이고, DB 가 임의 순서로 돌려줘 기존
   // 보고의 순서가 달라진다. 식별자가 "만들어진 순서"를 보존한다. (visits 와 같다)
-  problems: { orderBy: [{ sortOrder: "asc" }, { problemId: "asc" }] },
-  plans: { orderBy: [{ sortOrder: "asc" }, { planId: "asc" }] },
+  // 관련 고객은 선택이라 null 일 수 있다. visits 와 같은 select 로 이름만 읽는다.
+  problems: {
+    orderBy: [{ sortOrder: "asc" }, { problemId: "asc" }],
+    include: { customer: { select: { customerId: true, customerName: true } } },
+  },
+  plans: {
+    orderBy: [{ sortOrder: "asc" }, { planId: "asc" }],
+    include: { customer: { select: { customerId: true, customerName: true } } },
+  },
 } satisfies Prisma.DailyReportInclude;
 
 export type ReportDetailRecord = Prisma.DailyReportGetPayload<{
@@ -128,18 +135,30 @@ export interface ReportDetailResponse {
   }[];
   problems: {
     problemId: number;
-    customerId: number | null;
+    customer: { customerId: number; customerName: string } | null;
     content: string;
     status: "OPEN" | "CLOSED";
     sortOrder: number;
   }[];
   plans: {
     planId: number;
-    customerId: number | null;
+    customer: { customerId: number; customerName: string } | null;
     plannedDate: string | null;
     content: string;
     sortOrder: number;
   }[];
+}
+
+/** 관련 고객이 선택인 행(과제·계획)용. 고객이 없으면 null. */
+function toReportCustomerOrNull(
+  customer: { customerId: bigint; customerName: string } | null,
+): { customerId: number; customerName: string } | null {
+  return customer
+    ? {
+        customerId: toJsonId(customer.customerId),
+        customerName: customer.customerName,
+      }
+    : null;
 }
 
 export function toReportDetail(
@@ -165,14 +184,14 @@ export function toReportDetail(
     })),
     problems: report.problems.map((problem) => ({
       problemId: toJsonId(problem.problemId),
-      customerId: toJsonIdOrNull(problem.customerId),
+      customer: toReportCustomerOrNull(problem.customer),
       content: problem.content,
       status: problem.status,
       sortOrder: problem.sortOrder,
     })),
     plans: report.plans.map((plan) => ({
       planId: toJsonId(plan.planId),
-      customerId: toJsonIdOrNull(plan.customerId),
+      customer: toReportCustomerOrNull(plan.customer),
       plannedDate: plan.plannedDate ? formatDateOnly(plan.plannedDate) : null,
       content: plan.content,
       sortOrder: plan.sortOrder,

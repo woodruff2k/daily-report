@@ -37,7 +37,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     problems: [
       {
         problemId: 200,
-        customerId: 6,
+        customer: { customerId: 6, customerName: "비에이상사" },
         content: "납기 문의",
         status: "OPEN",
         sortOrder: 1,
@@ -46,7 +46,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     plans: [
       {
         planId: 300,
-        customerId: 7,
+        customer: { customerId: 7, customerName: "씨상사" },
         plannedDate: "2026-10-06",
         content: "견적 발송",
         sortOrder: 1,
@@ -102,11 +102,6 @@ function mockApi(handler: Handler = () => undefined, initial = detail()) {
           totalPages: 1,
         }),
       );
-    const one = url.pathname.match(/^\/api\/customers\/(\d+)$/);
-    if (one)
-      return Promise.resolve(
-        ok({ customerId: Number(one[1]), customerName: `고객${one[1]}` }),
-      );
     return Promise.resolve(fail(404, "NOT_FOUND"));
   });
 }
@@ -147,7 +142,7 @@ async function openForm() {
 }
 
 describe("SCR-210 일일보고 작성·수정 — #13", () => {
-  it("헤더와 기존 행을 보여주고, 과제·계획의 고객 이름을 getCustomer 로 채운다", async () => {
+  it("헤더와 기존 행을 보여주고, 과제·계획의 고객 이름이 첫 렌더에 바로 보인다", async () => {
     mockApi();
     await openForm();
 
@@ -155,22 +150,57 @@ describe("SCR-210 일일보고 작성·수정 — #13", () => {
     expect(screen.getByText("작성자: 합성사원")).toBeInTheDocument();
     expect(screen.getByText("상태: 작성중")).toBeInTheDocument();
     expect(screen.getByLabelText("방문 1행 방문내용")).toHaveValue("내용100");
-    // 과제·계획 응답에는 이름이 없다.
+    // 이름은 응답에 들어 있다. 폼이 뜨는 순간 이미 보이고 기다릴 단계가 없다.
     const problemRow = screen.getByLabelText("과제 1행 내용").closest("tr")!;
-    expect(within(problemRow).getByText("고객6")).toBeInTheDocument();
+    expect(within(problemRow).getByText("비에이상사")).toBeInTheDocument();
     const planRow = screen.getByLabelText("계획 1행 내용").closest("tr")!;
-    expect(within(planRow).getByText("고객7")).toBeInTheDocument();
+    expect(within(planRow).getByText("씨상사")).toBeInTheDocument();
   });
 
-  it("이름 조회가 실패하면 화면을 막지 않고 그 칸만 식별자로 둔다", async () => {
-    mockApi((url) =>
-      /^\/api\/customers\/\d+$/.test(url.pathname)
-        ? fail(500, "INTERNAL")
-        : undefined,
+  // 이슈 #87: 이름 조회를 걷어냈다. 해당 TC 는 없다(화면 쪽 회귀 방지).
+  it("과제·계획에 고객이 있어도 GET /api/customers/{id} 를 부르지 않는다", async () => {
+    const fetchMock = mockApi();
+    await openForm();
+
+    const paths = fetchMock.mock.calls.map(
+      ([input]) => new URL(String(input), "http://localhost").pathname,
+    );
+    // `/api/customers/{id}`(상세)만 본다. `/api/customers?keyword=`(목록)는 고객
+    // 피커가 검색할 때 쓰는 정상 호출이므로 여기서 막으면 제목과 뜻이 달라진다.
+    expect(paths.some((path) => /^\/api\/customers\/\d+$/.test(path))).toBe(
+      false,
+    );
+  });
+
+  it("관련 고객이 null 인 행은 이름 칸이 비어 있고, 저장 본문은 customerId null 을 보낸다", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi(
+      undefined,
+      detail({
+        problems: [
+          {
+            problemId: 201,
+            customer: null,
+            content: "내부 과제",
+            status: "OPEN",
+            sortOrder: 1,
+          },
+        ],
+      }),
     );
     await openForm();
-    expect(screen.getByText("고객 #6")).toBeInTheDocument();
-    expect(screen.getByText("고객 #7")).toBeInTheDocument();
+
+    const row = screen.getByLabelText("과제 1행 내용").closest("tr")!;
+    expect(within(row).queryByText(/^고객/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/고객 #/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    await screen.findByRole("status");
+    const [put] = writes(fetchMock);
+    expect(put.body.problems[0]).toMatchObject({
+      problemId: 201,
+      customerId: null,
+    });
   });
 
   it("[+ 행 추가] 는 세 섹션에 빈 행을 더한다 (예정일 기본값은 보고일자의 익일)", async () => {
@@ -446,43 +476,6 @@ describe("SCR-210 일일보고 작성·수정 — #13", () => {
  * `/code-review` 가 찾은 결함들. 고치기만 하고 테스트가 없으면 조용히 되돌아간다.
  */
 describe("SCR-210 — 검토에서 고친 것 (#13)", () => {
-  it("고객 이름 조회가 끝나지 않아도 폼은 먼저 보인다", async () => {
-    // 행마다 요청이 하나씩 늘어난다(최대 200). 전부 기다리면 하나가 늦는 것만으로
-    // 이미 받은 방문 기록까지 못 보고 "불러오는 중…" 에 머문다.
-    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
-      const url = new URL(String(input), "http://localhost");
-      if (/^\/api\/customers\/\d+$/.test(url.pathname)) {
-        return new Promise<Response>(() => {}); // 영원히 보류
-      }
-      if (
-        url.pathname === "/api/reports/10" &&
-        (init?.method ?? "GET") === "GET"
-      )
-        return Promise.resolve(ok(detail()));
-      return Promise.resolve(fail(404, "NOT_FOUND"));
-    });
-
-    render(<ReportEditPage />);
-
-    expect(
-      await screen.findByRole("button", { name: "임시저장" }),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("방문 1행 방문내용")).toHaveValue("내용100");
-    // 이름만 아직 비어 있다.
-    expect(screen.getByText("고객 #6")).toBeInTheDocument();
-  });
-
-  it("이름 조회가 401 이면 삼키지 않고 로그인으로 보낸다", async () => {
-    // 삼키면 "고객 #6" 이 뜬 폼을 계속 쓰다가 임시저장에서야 끊긴 것을 알게 된다.
-    mockApi((url) =>
-      /^\/api\/customers\/\d+$/.test(url.pathname)
-        ? fail(401, "UNAUTHORIZED")
-        : undefined,
-    );
-    render(<ReportEditPage />);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
-  });
-
   it("고객 검색 실패는 고객 도메인 문장으로 보여준다", async () => {
     const user = userEvent.setup();
     // 피커는 고객 API 를 부른다. 보고 문장을 쓰면 403 이 "일일보고는 영업사원·
@@ -531,7 +524,7 @@ describe("SCR-210 — 검토에서 고친 것 (#13)", () => {
         problems: [
           {
             problemId: 200,
-            customerId: null,
+            customer: null,
             content: "납기 문의",
             status: "OPEN",
             sortOrder: 1,
@@ -560,14 +553,14 @@ describe("SCR-210 — 검토에서 고친 것 (#13)", () => {
 describe("SCR-210 — 과제·계획 sortOrder (#85)", () => {
   const problem = (id: number, sortOrder: number, content: string) => ({
     problemId: id,
-    customerId: null,
+    customer: null,
     content,
     status: "OPEN",
     sortOrder,
   });
   const plan = (id: number, sortOrder: number, content: string) => ({
     planId: id,
-    customerId: null,
+    customer: null,
     plannedDate: "2026-10-06",
     content,
     sortOrder,
