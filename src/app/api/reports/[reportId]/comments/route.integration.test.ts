@@ -169,6 +169,40 @@ describe("POST /api/reports/{id}/comments (실제 DB)", () => {
   });
 });
 
+// 루트가 삭제되면 작성자는 그 스레드에 새 대댓글을 달 수 없다. 세 경로가 모두
+// 막히는 것을 고정한다 — 명세 4.3 에 적은 제약이고, 문서만 있으면 조용히
+// 바뀔 수 있다. 상급자가 자기 댓글을 영구히 지울 수 없던 것과의 맞교환이다.
+// 작성자의 기존 대댓글은 그대로 남고 수정·삭제도 된다(그쪽은 4.3 테스트가 덮는다).
+it("삭제된 루트 스레드에는 작성자가 새 대댓글을 달 수 없다 (#71 맞교환)", async () => {
+  const { manager, member } = await createTeam();
+  const report = await createReport(member.repId, { status: "SUBMITTED" });
+  const root = await createComment(report.reportId, manager.repId, {});
+  const reply = await createComment(report.reportId, member.repId, {
+    parentCommentId: root.commentId,
+  });
+  // 대댓글이 있으므로 루트는 소프트 삭제된다.
+  await prisma.reportComment.update({
+    where: { commentId: root.commentId },
+    data: { deletedAt: new Date() },
+  });
+
+  const asRoot = await post(report.reportId, member, { content: "루트 시도" });
+  const underDeleted = await post(report.reportId, member, {
+    content: "삭제된 부모",
+    parentCommentId: Number(root.commentId),
+  });
+  const underReply = await post(report.reportId, member, {
+    content: "대댓글의 대댓글",
+    parentCommentId: Number(reply.commentId),
+  });
+
+  expect(asRoot.status).toBe(403);
+  expect(underDeleted.status).toBe(400);
+  expect(underDeleted.body.error.code).toBe("PARENT_DELETED");
+  expect(underReply.status).toBe(400);
+  expect(underReply.body.error.code).toBe("PARENT_IS_REPLY");
+});
+
 describe("GET /api/reports/{id}/comments (실제 DB)", () => {
   it("TC-CMT-03: 루트 댓글 아래에 대댓글이 계층으로, 작성순으로 반환된다", async () => {
     const { manager, member } = await createTeam();

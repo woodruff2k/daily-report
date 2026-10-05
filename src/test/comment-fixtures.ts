@@ -39,6 +39,7 @@ export const REPLY: CommentTreeRecord["replies"][number] = {
   parentCommentId: 400n,
   content: "확인했습니다",
   createdAt: new Date("2026-06-20T10:10:00.000Z"),
+  deletedAt: null,
   commenter: AUTHOR,
 };
 
@@ -47,6 +48,7 @@ export const ROOT_COMMENT: CommentTreeRecord = {
   parentCommentId: null,
   content: "견적 일정 확인 바람",
   createdAt: new Date("2026-06-20T10:00:00.000Z"),
+  deletedAt: null,
   commenter: MANAGER,
   replies: [REPLY],
 };
@@ -54,6 +56,12 @@ export const ROOT_COMMENT: CommentTreeRecord = {
 export const ROOT_WITHOUT_REPLIES: CommentTreeRecord = {
   ...ROOT_COMMENT,
   replies: [],
+};
+
+/** 소프트 삭제된 루트 댓글. 내용은 DB 에 남아 있지만 응답에는 나가면 안 된다. */
+export const DELETED_ROOT: CommentTreeRecord = {
+  ...ROOT_COMMENT,
+  deletedAt: new Date("2026-06-20T11:00:00.000Z"),
 };
 
 export function reportParams(reportId: string) {
