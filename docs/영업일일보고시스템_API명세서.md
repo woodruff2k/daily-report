@@ -234,8 +234,8 @@
 `PUT /api/reports/{reportId}`
 
 - 화면(SCR-210)의 임시저장에 대응. 본문의 배열로 방문/과제/계획을 **일괄 반영**한다.  
-- `id`가 있으면 수정, 없으면 신규, 응답에 없는 기존 항목은 삭제 처리(전체 교체 방식).  
-- DRAFT 상태에서만 허용.
+- **`visitId`·`problemId`·`planId`** 가 있으면 수정, 없으면 신규, 요청에 없는 기존 항목은 삭제 처리(전체 교체 방식). 공통 `id` 필드는 없다.  
+- DRAFT 상태에서만 허용. **제출된 보고의 저장은 409 `REPORT_LOCKED`**, 타인 보고는 403.
 
 요청
 
@@ -260,16 +260,19 @@
 
 | 유효성 | 규칙 |
 | :---- | :---- |
-| visits | 최소 1건, 각 항목 customerId·visitType·content 필수 |
+| visits | 각 항목 customerId·visitType·content 필수. **0건도 저장된다** — 최소 1건은 제출(3.5)에서 검증한다. 빈 보고를 임시저장할 수 없으면 SCR-210 의 작성 흐름이 막히기 때문이다 |
 | visitType | VISIT / CALL / ONLINE |
 | customerId | 활성 또는 참조 가능한 고객 |
-| sortOrder | visits·problems·plans 의 각 항목에 선택. 0~9999 정수. 생략하면 요청 배열 순서(1부터)를 따른다. 응답은 `sortOrder` 오름차순, 같으면 식별자 오름차순으로 돌려준다 |
+| sortOrder | visits·problems·plans 의 각 항목에 선택. 0~9999 정수. 생략하면 요청 배열 순서(1부터)를 따른다. **한 배열 안에서는 전부 보내거나 전부 생략해야 한다** — 일부만 보내면 400. 섞으면 명시값과 배열 순서가 충돌해 둘 다 아닌 순서가 나온다. 응답은 `sortOrder` 오름차순, 같으면 식별자 오름차순으로 돌려준다 |
 
 ### 3.5 일일보고 제출
 
 `POST /api/reports/{reportId}/submit`
 
 - DRAFT → SUBMITTED 전환. 방문기록 1건 이상 등 유효성 통과 시 처리.
+- **방문기록 0건은 400 `VISITS_REQUIRED`.** 저장(3.4)은 0건을 허용하고 제출만 막는다.
+- **이미 제출된 보고는 409 `REPORT_ALREADY_SUBMITTED`.** 동시에 두 번 눌러도 한 번만 전환된다.
+- 작성자 본인만 제출한다. 그 밖은 403.
 
 응답 200
 
