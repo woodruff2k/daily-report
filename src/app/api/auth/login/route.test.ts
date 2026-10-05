@@ -232,3 +232,36 @@ describe("POST /api/auth/login — 식별자 타입 (#47)", () => {
     expect(typeof payload.repId).toBe("string");
   });
 });
+
+// 이슈 #10: 상한 초과 입력은 자격 증명 오류와 구별되지 않는다 (계정 존재 여부 비노출)
+describe("POST /api/auth/login — 입력 상한", () => {
+  it.each([
+    ["loginId 256자", { loginId: "a".repeat(256), password: PASSWORD }],
+    ["password 73자", { loginId: ACTIVE_REP.email, password: "p".repeat(73) }],
+    ["loginId NUL", { loginId: "a\u0000b", password: PASSWORD }],
+  ])(
+    "%s 는 비밀번호 오류와 같은 401 이고 DB·해시에 닿지 않는다",
+    async (_n, body) => {
+      vi.mocked(verifyPassword).mockResolvedValue(false);
+      const wrong = await login({
+        loginId: ACTIVE_REP.email,
+        password: "wrong",
+      });
+      vi.mocked(verifyPassword).mockClear();
+      vi.mocked(prisma.salesRep.findFirst).mockClear();
+      vi.mocked(verifyPassword).mockResolvedValue(false);
+
+      const response = await login(body);
+
+      expect(response.status).toBe(401);
+      expect(await readBody(response)).toEqual(await readBody(wrong));
+      expect(prisma.salesRep.findFirst).not.toHaveBeenCalled();
+      expect(verifyPassword).not.toHaveBeenCalled();
+    },
+  );
+
+  it("필드 누락은 여전히 400 이다", async () => {
+    const response = await login({ loginId: "a" });
+    expect(response.status).toBe(400);
+  });
+});

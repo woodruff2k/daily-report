@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "./identifier";
+import { multiLineText, singleLineText } from "./text";
 
 /**
  * 고객 마스터 입력 검증. (FR-01, API 명세 5)
@@ -19,10 +20,11 @@ function blankToNull(value: unknown): unknown {
   return trimmed === "" ? null : trimmed;
 }
 
-/** 선택 텍스트. */
-function optionalText(max: number) {
+/** 선택 텍스트. 한 줄이 기본이고 주소만 여러 줄을 허용한다. */
+function optionalText(max: number, multiline = false) {
+  const base = multiline ? multiLineText() : singleLineText();
   return z
-    .preprocess(blankToNull, z.string().max(max).nullish())
+    .preprocess(blankToNull, base.max(max).nullish())
     .transform((value) => value ?? null);
 }
 
@@ -38,11 +40,11 @@ const optionalEmail = z
   .transform((value) => value ?? null);
 
 export const customerCreateSchema = z.object({
-  customerName: z.string().trim().min(1).max(100),
+  customerName: singleLineText().min(1).max(100),
   companyName: optionalText(100),
   phone: optionalPhone,
   email: optionalEmail,
-  address: optionalText(255),
+  address: optionalText(500, true),
   grade: optionalText(20),
   /**
    * API 수준에서 필수다. Prisma 컬럼은 `BigInt?` 라 null 을 허용하지만, 그것은

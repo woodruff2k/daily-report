@@ -2,7 +2,8 @@
 // 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-05, TC-SUB-03,
 //          TC-CUS-05(비활성 고객의 과거 방문기록 유지), TC-NFR-01, TC-SEC-06
 // 이슈 #7: PUT 전체 교체의 원자성, status=DRAFT 조건부 UPDATE 의 직렬화
-import { describe, expect, it } from "vitest";
+import type { Prisma } from "@prisma/client";
+import { describe, expect, it, vi } from "vitest";
 import { GET, PUT } from "./route";
 import { POST as submit } from "./submit/route";
 import { prisma } from "@/lib/prisma";
@@ -240,15 +241,42 @@ describe("PUT /api/reports/{id} (실제 DB)", () => {
       where: { reportId: report.reportId },
     });
 
-    // 검증(스키마·고객 존재)은 통과하지만 INSERT 에서 PostgreSQL 이 거부하는 값이다.
-    // NUL 문자는 text 컬럼에 저장할 수 없다. deleteMany 3건이 이미 실행된 뒤에 실패한다.
-    await expect(
-      putReport(report.reportId, rep, {
-        visits: [visitRow(customer.customerId, "깨지는\u0000행")],
-        problems: [],
-        plans: [],
-      }),
-    ).rejects.toThrow();
+    // 실패 주입: 같은 트랜잭션 안에서 deleteMany 3건이 실행된 뒤 방문 createMany 만
+    // 던지게 한다. 입력 값(NUL 등)이 아니라 쓰기 단계 자체를 실패시키므로, 입력 검증이
+    // 강화돼도 이 테스트는 영향받지 않는다. 롤백은 실제 PostgreSQL 이 한다.
+    // 트랜잭션 밖(prisma)에서 쓰도록 바뀌면 deleteMany 가 커밋되어 아래 단언이 깨진다.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const realTransaction = prisma.$transaction.bind(prisma);
+    vi.spyOn(prisma, "$transaction").mockImplementationOnce((async (
+      callback: (tx: Prisma.TransactionClient) => Promise<unknown>,
+    ) =>
+      realTransaction((tx) =>
+        callback(
+          new Proxy(tx, {
+            get(target, prop, receiver) {
+              if (prop !== "visitRecord") {
+                return Reflect.get(target, prop, receiver);
+              }
+              return new Proxy(target.visitRecord, {
+                get(model, method) {
+                  if (method === "createMany") {
+                    return () => Promise.reject(new Error("injected failure"));
+                  }
+                  return Reflect.get(model, method);
+                },
+              });
+            },
+          }),
+        ),
+      )) as never);
+
+    const failed = await putReport(report.reportId, rep, {
+      visits: [visitRow(customer.customerId, "새 행")],
+      problems: [],
+      plans: [],
+    });
+    expect(failed.status).toBe(500);
+    expect(failed.body.error.code).toBe("INTERNAL_ERROR");
 
     const visits = await prisma.visitRecord.findMany({
       where: { reportId: report.reportId },
@@ -267,6 +295,47 @@ describe("PUT /api/reports/{id} (실제 DB)", () => {
       where: { reportId: report.reportId },
     });
     expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it("이슈 #75: content 의 NUL 문자는 500 이 아니라 400 이고 기존 행이 그대로다", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    await createVisit(report.reportId, customer.customerId, {
+      content: "기존",
+    });
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [visitRow(customer.customerId, "깨지는\u0000행")],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(400);
+    expect(result.body.error.code).toBe("INVALID_REQUEST");
+    expect(result.raw).not.toContain("stack");
+    const visits = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+    });
+    expect(visits.map((v) => v.content)).toEqual(["기존"]);
+  });
+
+  it("이슈 #75: 줄바꿈·탭이 든 content 는 그대로 저장된다 (회귀)", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [visitRow(customer.customerId, "1줄\n2줄\t탭")],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    const visit = await prisma.visitRecord.findFirstOrThrow({
+      where: { reportId: report.reportId },
+    });
+    expect(visit.content).toBe("1줄\n2줄\t탭");
   });
 
   it("TC-SEC-01: 남의 보고 PUT 은 403 이고 내용이 바뀌지 않는다", async () => {

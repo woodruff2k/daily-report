@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "./identifier";
+import { multiLineText } from "./text";
 
 /**
  * 일일보고 입력 검증. (FR-03·04·06·07, API 명세 3.2·3.4)
@@ -33,7 +34,7 @@ function blankToNull(value: unknown): unknown {
 
 function optionalText(max: number) {
   return z
-    .preprocess(blankToNull, z.string().max(max).nullish())
+    .preprocess(blankToNull, multiLineText().max(max).nullish())
     .transform((value) => value ?? null);
 }
 
@@ -57,7 +58,7 @@ const optionalDate = z
   .preprocess(blankToNull, dateOnlySchema.nullish())
   .transform((value) => value ?? null);
 
-const content = z.string().trim().min(1).max(2000);
+const content = multiLineText().min(1).max(2000);
 
 /** 한 보고에 담을 수 있는 행 수의 상한. 과대 요청이 트랜잭션을 붙잡지 않게 한다. */
 const MAX_ROWS = 100;

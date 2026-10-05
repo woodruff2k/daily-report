@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "./identifier";
+import { multiLineText } from "./text";
 
 /**
  * 댓글 입력 검증. (FR-09, API 명세 4.2·4.3)
@@ -12,7 +13,7 @@ import { idSchema } from "./identifier";
  * 공백뿐인 내용은 거부한다. 상한 2000자는 보고 행의 내용(`report.ts`)과 같다.
  * 저장하는 값은 앞뒤 공백을 뗀 값이다.
  */
-const content = z.string().trim().min(1).max(2000);
+const content = multiLineText().min(1).max(2000);
 
 /** 댓글 작성. `parentCommentId` 생략·null 은 루트 댓글이다. */
 export const commentCreateSchema = z.object({

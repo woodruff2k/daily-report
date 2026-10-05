@@ -6,11 +6,34 @@ import { apiError, apiSuccess } from "@/lib/api-response";
 import { toJsonId } from "@/lib/identifier";
 import { loginRequestSchema } from "@/schemas/auth";
 
+function isWellTypedCredentials(body: unknown): boolean {
+  if (typeof body !== "object" || body === null) {
+    return false;
+  }
+  const { loginId, password } = body as Record<string, unknown>;
+  return (
+    typeof loginId === "string" &&
+    loginId.length > 0 &&
+    typeof password === "string" &&
+    password.length > 0
+  );
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = loginRequestSchema.safeParse(body);
 
   if (!parsed.success) {
+    // 형식은 맞는데 길이·문자 제한만 어긴 입력은 비밀번호 오류와 같은 401 로
+    // 응답한다. 계정 조회·해시 비교에는 들어가지 않으며(어떤 계정에도 일치할 수
+    // 없다), 응답이 "입력 제한"과 "자격 증명 오류"를 구분해 알려주지 않게 한다.
+    if (isWellTypedCredentials(body)) {
+      return apiError(
+        "UNAUTHORIZED",
+        "아이디 또는 비밀번호가 올바르지 않습니다.",
+        401,
+      );
+    }
     return apiError("INVALID_REQUEST", "필수 항목 누락", 400);
   }
 

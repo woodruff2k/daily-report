@@ -140,3 +140,34 @@ describe("reportSaveSchema", () => {
     ).toBe(false);
   });
 });
+
+// 이슈 #75: NUL 은 400, 줄바꿈·탭은 허용(회귀)
+describe("reportSaveSchema 제어문자", () => {
+  const visit = { customerId: 1, visitType: "VISIT", content: "내용" };
+
+  it.each([
+    ["방문 내용", { visits: [{ ...visit, content: "a\u0000b" }] }],
+    ["방문 결과", { visits: [{ ...visit, result: "a\u0000b" }] }],
+    ["과제 내용", { problems: [{ content: "a\u0000b" }] }],
+    ["계획 내용", { plans: [{ content: "a\u0000b" }] }],
+  ])("%s 의 NUL 을 거부한다", (_name, patch) => {
+    expect(
+      reportSaveSchema.safeParse({
+        visits: [],
+        problems: [],
+        plans: [],
+        ...patch,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("내용·결과의 줄바꿈과 탭을 허용한다", () => {
+    const parsed = reportSaveSchema.parse({
+      visits: [{ ...visit, content: "1줄\n2줄\t탭", result: "a\r\nb" }],
+      problems: [{ content: "x\ny" }],
+      plans: [{ content: "x\ny" }],
+    });
+    expect(parsed.visits[0].content).toBe("1줄\n2줄\t탭");
+    expect(parsed.visits[0].result).toBe("a\r\nb");
+  });
+});

@@ -4,6 +4,7 @@ import {
   MIN_PASSWORD_LENGTH,
 } from "@/lib/password-policy";
 import { idSchema } from "./identifier";
+import { singleLineText } from "./text";
 
 /**
  * 영업 마스터 입력 검증. (FR-02, API 명세 6)
@@ -23,11 +24,11 @@ const repStatusSchema = z.enum(["ACTIVE", "INACTIVE"]);
 const roleSchema = z.enum(["SALES_REP", "MANAGER", "ADMIN"]);
 
 export const salesRepCreateSchema = z.object({
-  empNo: z.string().trim().min(1).max(20),
-  name: z.string().trim().min(1).max(100),
+  empNo: singleLineText().min(1).max(20),
+  name: singleLineText().min(1).max(100),
   email: z.string().trim().email().max(255),
-  department: z.string().trim().max(100).optional(),
-  position: z.string().trim().max(100).optional(),
+  department: singleLineText().max(100).optional(),
+  position: singleLineText().max(100).optional(),
   managerId: idSchema.optional(),
   role: roleSchema.default("SALES_REP"),
   status: repStatusSchema.default("ACTIVE"),

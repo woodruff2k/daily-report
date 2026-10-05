@@ -112,11 +112,24 @@ describe("GET /api/sales-reps/options", () => {
     }
   });
 
-  it("조회 실패는 응답 본문을 만들지 않고 던진다 (Next 가 500 을 내고 내용은 싣지 않는다)", async () => {
+  it("조회 실패는 목록 내용 없이 500 INTERNAL_ERROR 로 응답한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(prisma.salesRep.findMany).mockRejectedValue(
       new Error("connection refused"),
     );
 
-    await expect(GET(asSalesRep(URL))).rejects.toThrow("connection refused");
+    const response = await GET(asSalesRep(URL));
+    const body = (await response.json()) as {
+      success: boolean;
+      data: unknown;
+      error: { code: string };
+    };
+
+    expect(response.status).toBe(500);
+    expect(body).toMatchObject({
+      success: false,
+      data: null,
+      error: { code: "INTERNAL_ERROR" },
+    });
   });
 });

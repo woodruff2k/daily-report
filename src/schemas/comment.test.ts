@@ -55,3 +55,21 @@ describe("commentUpdateSchema", () => {
     },
   );
 });
+
+// 이슈 #75: NUL 은 400, 줄바꿈·탭은 허용(회귀)
+describe("comment content 제어문자", () => {
+  it("NUL 을 거부한다", () => {
+    expect(commentCreateSchema.safeParse({ content: "a\u0000b" }).success).toBe(
+      false,
+    );
+    expect(commentUpdateSchema.safeParse({ content: "a\u0000b" }).success).toBe(
+      false,
+    );
+  });
+
+  it("줄바꿈·탭을 허용한다", () => {
+    expect(commentCreateSchema.parse({ content: "a\nb\tc" }).content).toBe(
+      "a\nb\tc",
+    );
+  });
+});
