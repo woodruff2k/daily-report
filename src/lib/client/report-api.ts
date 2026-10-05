@@ -50,6 +50,83 @@ export function createReport(reportDate: string) {
   });
 }
 
+export type VisitType = "VISIT" | "CALL" | "ONLINE";
+export type ProblemStatus = "OPEN" | "CLOSED";
+
+/** 상세 응답(API 명세 3.3). 과제·계획에는 고객 이름이 없고 식별자만 있다. */
+export interface ReportDetail {
+  reportId: number;
+  rep: { repId: number; name: string };
+  reportDate: string;
+  status: ReportStatus;
+  submittedAt: string | null;
+  visits: {
+    visitId: number;
+    customer: { customerId: number; customerName: string };
+    visitTime: string | null;
+    visitType: VisitType;
+    content: string;
+    result: string | null;
+    sortOrder: number;
+  }[];
+  problems: {
+    problemId: number;
+    customerId: number | null;
+    content: string;
+    status: ProblemStatus;
+  }[];
+  plans: {
+    planId: number;
+    customerId: number | null;
+    plannedDate: string | null;
+    content: string;
+  }[];
+}
+
+/** 저장 본문(API 명세 3.4). 전체 교체라 세 배열을 항상 모두 보낸다. */
+export interface ReportSaveBody {
+  visits: {
+    visitId?: number;
+    customerId: number;
+    visitTime: string | null;
+    visitType: VisitType;
+    content: string;
+    result: string | null;
+    sortOrder: number;
+  }[];
+  problems: {
+    problemId?: number;
+    customerId: number | null;
+    content: string;
+    status: ProblemStatus;
+  }[];
+  plans: {
+    planId?: number;
+    customerId: number | null;
+    plannedDate: string | null;
+    content: string;
+  }[];
+}
+
+export function getReport(reportId: number) {
+  return apiFetch<ReportDetail>(`/api/reports/${reportId}`);
+}
+
+export function saveReport(reportId: number, body: ReportSaveBody) {
+  return apiFetch<ReportDetail>(`/api/reports/${reportId}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export function submitReport(reportId: number) {
+  return apiFetch<{
+    reportId: number;
+    status: ReportStatus;
+    submittedAt: string;
+  }>(`/api/reports/${reportId}/submit`, { method: "POST" });
+}
+
 /** 같은 일자의 보고가 이미 있을 때 서버가 주는 409 코드. */
 export const REPORT_ALREADY_EXISTS = "REPORT_ALREADY_EXISTS";
 
@@ -69,7 +146,21 @@ export const ROLE_FORBIDDEN_MESSAGE =
 // 틀렸다" 로 단정하면 형식이 맞는데도 그렇게 말하게 되고, 사용자가 형식을 고쳐도
 // 해결되지 않는다. 그래서 **서버가 준 문장을 그대로 보여준다** — 서버 쪽이 어느
 // 조건인지 알고 한국어로 적어 준다(예: "fromDate 는 toDate 보다 늦을 수 없습니다").
-const CODE_MESSAGE: Record<string, string> = {};
+/**
+ * 제출 전 화면 검증과 서버의 400 이 같은 규칙을 말한다. 두 군데 적어 두면 한쪽만
+ * 고쳐도 양쪽 테스트가 통과해 조용히 갈라지므로, 여기를 단일 출처로 둔다.
+ * (`report-form.ts` 가 이것을 가져온다 — 반대 방향은 순환 의존이다.)
+ */
+export const VISITS_REQUIRED_MESSAGE =
+  "방문 기록을 1건 이상 입력해야 제출할 수 있습니다.";
+
+const CODE_MESSAGE: Record<string, string> = {
+  VISITS_REQUIRED: VISITS_REQUIRED_MESSAGE,
+  REPORT_LOCKED: "제출된 보고는 수정할 수 없습니다.",
+  REPORT_ALREADY_SUBMITTED: "이미 제출된 보고입니다.",
+  CUSTOMER_NOT_FOUND: "선택한 고객을 찾을 수 없습니다. 고객을 다시 선택하세요.",
+  NOT_FOUND: "보고를 찾을 수 없습니다.",
+};
 
 /** 서버 메시지를 그대로 보여줄 코드. 조건이 여러 개라 화면이 단정할 수 없다. */
 const USE_SERVER_MESSAGE = new Set(["INVALID_REQUEST"]);
