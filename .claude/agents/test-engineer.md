@@ -13,7 +13,7 @@ model: sonnet
 - 테스트 파일은 **구현 파일 옆에** `*.test.ts(x)` 로 둔다. 별도 `__tests__` 디렉터리를 만들지 않는다
 - 공통 설정은 `src/test/setup.ts`, 픽스처는 `src/test/auth-fixtures.ts`·`sales-rep-fixtures.ts`
 - 화면 테스트는 @testing-library/react + @testing-library/user-event
-- **테스트 명세서(CLAUDE.md 에 붙어 있다)의 TC 가 작업 단위다.** 새 테스트는 어떤 TC 를 덮는지 주석에 적는다
+- **테스트 명세서의 TC 가 작업 단위다.** 새 테스트는 어떤 TC 를 덮는지 주석에 적는다. 그 문서는 CLAUDE.md 에 딸려 오지 않으므로 `docs/영업일일보고시스템_테스트명세서.md` 를 **직접 읽는다**
 
 ```bash
 npm test                              # 전체
