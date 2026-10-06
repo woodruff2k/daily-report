@@ -9,6 +9,10 @@ generator client {
 // 드라이버 어댑터 필수화, ESM 전환, Node 20.19 이상 요구가 함께 따라온다.
 // 학습용 프로젝트 범위에 비해 비용이 커서 올리지 않기로 했다.
 //
+// npm audit 이 prisma(CLI) 에 high 3건(@prisma/config → deepmerge-ts < 8)을 보고하지만
+// 6.x 최신이 6.19.3 이라 6.x 안에는 fix 가 없다. audit 이 제안하는 6.12.0 은 다운그레이드다.
+// 경로는 CLI 의 config 병합뿐이고 CLI 는 운영 이미지에 없다(#97). 올리지도 내리지도 않는다.
+//
 // 다시 검토한다면 이슈 #37 의 코멘트에 남은 작업 목록이 정리되어 있다.
 // (배경: Issue #28, #37, PR #22)
 datasource db {

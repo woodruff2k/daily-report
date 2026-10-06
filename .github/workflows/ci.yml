@@ -40,6 +40,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 의존성 취약점 리포트(#97). 비차단(continue-on-error)으로 둔다.
+      #  - 차단(--audit-level=critical)은 지금 켜면 바로 빨개진다: 전체 audit 에
+      #    next(RCE 권고)·proxy-addr 가 critical 로 남아 있다. 올림은 별도 이슈다.
+      #  - 건수를 0 으로 만드는 것이 목적이 아니다. 전이 의존은 상위 패키지가 올라가야
+      #    사라지고 `npm audit fix --force` 는 prisma 를 6.12.0 으로 *내린다*.
+      #  - 전체(dev 포함)로 본다. 이 프로젝트는 next·react·prisma 가 devDependencies 에
+      #    있어 `--omit=dev` 는 next 를 통째로 빼먹는다(운영 번들에는 들어가는데도).
+      #  - 남아 있는 건과 "왜 괜찮은지"는 이슈 #97 에 정리했다. prisma 3건은 CLI 전용
+      #    (운영 이미지에 없음)이고 6.x 안에는 fix 가 없다.
+      # 로그의 요약을 보고, 새 critical 이 늘면 별도로 처리한다. 차단으로 바꾸려면
+      # continue-on-error 를 지우고 --audit-level=critical 을 붙인다.
+      - name: Dependency audit (non-blocking)
+        run: npm audit
+        continue-on-error: true
+
       # 싼 검사부터 돌려 빨리 실패시킨다.
       - name: Format
         run: npm run format:check
