@@ -167,23 +167,20 @@ describe("SCR-220 일일보고 상세·조회 — #14", () => {
     );
   });
 
-  it(
-    "관련 고객이 null 인 행은 이름 칸에 " - " 를 보이고 오류가 아니다",
-    async () => {
-      login(MANAGER);
-      mockApi();
-      render(<ReportDetailPage />);
-      await screen.findByText("내부 과제");
+  it('관련 고객이 null 인 행은 이름 칸에 "-" 를 보이고 오류가 아니다', async () => {
+    login(MANAGER);
+    mockApi();
+    render(<ReportDetailPage />);
+    await screen.findByText("내부 과제");
 
-      // 비었음은 이 화면의 다른 선택 항목(방문시각·상담결과·예정일)과 같이 "-" 로
-      // 표시한다. 빈 칸으로 두면 "관련 고객이 없다" 와 "렌더가 실패했다" 를 구분할 수
-      // 없고, 바로 옆 칸이 "-" 를 쓰고 있어 더 어긋나 보인다.
-      const row = screen.getByText("내부 과제").closest("tr")!;
-      const cells = within(row).getAllByRole("cell");
-      expect(cells[0]).toHaveTextContent("-");
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    },
-  );
+    // 비었음은 이 화면의 다른 선택 항목(방문시각·상담결과·예정일)과 같이 "-" 로
+    // 표시한다. 빈 칸으로 두면 "관련 고객이 없다" 와 "렌더가 실패했다" 를 구분할 수
+    // 없고, 바로 옆 칸이 "-" 를 쓰고 있어 더 어긋나 보인다.
+    const row = screen.getByText("내부 과제").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).toHaveTextContent("-");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 
   it("SUBMITTED 보고에는 [수정] 이 없다", async () => {
     login(MANAGER);
