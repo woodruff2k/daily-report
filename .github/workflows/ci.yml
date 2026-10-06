@@ -8,7 +8,7 @@ on:
 
 jobs:
   check:
-    name: Check (format, lint, test, integration, build)
+    name: Check (format, lint, typecheck, test, integration, build)
     runs-on: ubuntu-latest
 
     # 통합 테스트 전용 DB. 자격증명은 이 컨테이너 안에서만 쓰는 더미다.
@@ -46,6 +46,11 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # 타입 오류를 여기서 잡는다. next build 는 테스트 파일을 보지 않아, 테스트에
+      # 생긴 타입 오류가 CI 를 통과했다(PR #91). vitest 도 타입 검사를 하지 않는다.
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
         run: npm test
