@@ -693,3 +693,142 @@ describe("SCR-210 — 과제·계획 sortOrder (#85)", () => {
     ]);
   });
 });
+
+// #93: 뮤테이션 확인에서 아래 조건들이 깨져도 기존 테스트가 통과했다.
+describe("SCR-210 — #93 보강", () => {
+  it.each(["abc", "0", "-3", "1.5"])(
+    "reportId 가 %s 이면 서버를 부르지 않고 찾을 수 없다고 보인다",
+    async (bad) => {
+      params.reportId = bad;
+      const fetchMock = mockApi();
+      try {
+        render(<ReportEditPage />);
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+          "보고를 찾을 수 없습니다.",
+        );
+        expect(
+          fetchMock.mock.calls.filter(([url]) =>
+            String(url).startsWith("/api/reports"),
+          ),
+        ).toEqual([]);
+        expect(
+          screen.queryByRole("button", { name: "임시저장" }),
+        ).not.toBeInTheDocument();
+      } finally {
+        params.reportId = "10";
+      }
+    },
+  );
+
+  it("저장이 CUSTOMER_NOT_FOUND 로 거절되면 고객을 다시 고르라고 안내한다", async () => {
+    const user = userEvent.setup();
+    mockApi((url, init) =>
+      url.pathname === "/api/reports/10" && init?.method === "PUT"
+        ? fail(400, "CUSTOMER_NOT_FOUND", "서버 원문")
+        : undefined,
+    );
+    await openForm();
+
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "선택한 고객을 찾을 수 없습니다. 고객을 다시 선택하세요.",
+    );
+  });
+
+  it("제출이 REPORT_ALREADY_SUBMITTED 로 거절되면 그 사유를 보이고 이동하지 않는다", async () => {
+    const user = userEvent.setup();
+    mockApi((url) =>
+      url.pathname === "/api/reports/10/submit"
+        ? fail(409, "REPORT_ALREADY_SUBMITTED", "서버 원문")
+        : undefined,
+    );
+    await openForm();
+
+    await user.click(screen.getByRole("button", { name: "제출" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이미 제출된 보고입니다.",
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("저장 실패 뒤 입력을 고치면 묵은 오류를 치운다", async () => {
+    // 안 치우면 이미 고친 행의 오류가 다음 저장까지 남는다.
+    const user = userEvent.setup();
+    mockApi((url, init) =>
+      url.pathname === "/api/reports/10" && init?.method === "PUT"
+        ? fail(409, "REPORT_LOCKED")
+        : undefined,
+    );
+    await openForm();
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("방문 1행 방문내용"), "추가");
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("저장하는 동안 입력을 잠가 응답이 편집 중인 내용을 덮어쓰지 않게 한다", async () => {
+    const user = userEvent.setup();
+    let release!: (response: Response) => void;
+    mockApi((url, init) =>
+      url.pathname === "/api/reports/10" && init?.method === "PUT"
+        ? (new Promise<Response>((resolve) => {
+            release = resolve;
+          }) as unknown as Response)
+        : undefined,
+    );
+    await openForm();
+    expect(screen.getByLabelText("방문 1행 방문내용")).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+
+    expect(screen.getByLabelText("방문 1행 방문내용")).toBeDisabled();
+    release(ok(detail()));
+    await screen.findByText("임시저장했습니다.");
+    expect(screen.getByLabelText("방문 1행 방문내용")).toBeEnabled();
+  });
+
+  it("임시저장해도 고르던 중인 계획의 고객 검색어가 남는다", async () => {
+    // 과제 행만 확인하던 것을 계획 행까지 넓힌다. 섹션마다 key 처리가 따로다.
+    const user = userEvent.setup();
+    mockApi(
+      undefined,
+      detail({
+        plans: [
+          {
+            planId: 300,
+            customer: null,
+            plannedDate: "2026-10-06",
+            content: "견적 발송",
+            sortOrder: 1,
+          },
+        ],
+      }),
+    );
+    await openForm();
+
+    await user.type(screen.getByLabelText("계획 1행 고객 검색"), "씨상");
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+    await screen.findByText("임시저장했습니다.");
+
+    expect(screen.getByLabelText("계획 1행 고객 검색")).toHaveValue("씨상");
+  });
+
+  it("방문이 0건이어도 임시저장은 PUT 을 보낸다 (방문 1건 이상은 제출 조건이다)", async () => {
+    // 빈 보고를 임시저장할 수 없으면 작성 흐름이 막힌다. [임시저장] 이 제출 검증을 쓰도록
+    // 바꿔도 기존 테스트가 통과했다(#93 뮤테이션 확인).
+    const user = userEvent.setup();
+    const fetchMock = mockApi(undefined, detail({ visits: [] }));
+    await openForm();
+
+    await user.click(screen.getByRole("button", { name: "임시저장" }));
+
+    expect(await screen.findByText("임시저장했습니다.")).toBeInTheDocument();
+    expect(writes(fetchMock).map((call) => call.method)).toEqual(["PUT"]);
+    expect(writes(fetchMock)[0].body.visits).toEqual([]);
+  });
+});

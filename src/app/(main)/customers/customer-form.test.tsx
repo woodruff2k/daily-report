@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // 안정된 객체. 렌더마다 새로 만들면 [router] 의존 효과가 반복된다.
@@ -382,6 +382,12 @@ describe("SCR-410 수정 — #16", () => {
 
     // 확인 전에는 서버를 부르지 않는다.
     const dialog = await screen.findByRole("dialog");
+    // 무엇을 확인받는지 사용자가 읽을 수 있어야 한다. (이전에는 마지막 줄의
+    // `expect(dialog).toBeDefined()` 가 이 자리를 대신했는데, findByRole 이 이미 요소를
+    // 돌려준 뒤라 항상 참이어서 아무것도 보장하지 않았다 — #93)
+    expect(
+      within(dialog).getByText("고객을 비활성화할까요?"),
+    ).toBeInTheDocument();
     expect(writes(fetchMock)).toHaveLength(0);
 
     await user.click(screen.getByRole("button", { name: "확인" }));
@@ -397,7 +403,6 @@ describe("SCR-410 수정 — #16", () => {
     expect(
       fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
     ).toBe(false);
-    expect(dialog).toBeDefined();
   });
 
   it("확인 창에서 취소하면 호출하지 않는다", async () => {
@@ -485,5 +490,86 @@ describe("SCR-410 수정·비활성화의 403 — #68", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("영업사원·상급자만 사용할 수 있습니다");
     expect(alert).not.toHaveTextContent("담당 영업과 그 상급자만");
+  });
+});
+
+// #93: 뮤테이션 확인에서 제출 중 잠금을 지우거나 실패 뒤에도 풀지 않아도 통과했다.
+// 고객은 유일 제약이 없어 이중 제출이 곧 중복 등록이다.
+describe("SCR-410 제출 중 잠금 — #93", () => {
+  function pending() {
+    let release!: (response: Response) => void;
+    const promise = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    return { promise: promise as unknown as Response, release };
+  }
+
+  it("등록 요청이 끝나기 전에는 [저장] 이 눌리지 않아 두 번 등록되지 않는다", async () => {
+    const hold = pending();
+    const fetchMock = mockApi(() => hold.promise);
+    render(<CustomerForm />);
+    const user = userEvent.setup();
+    await fillRequired(user);
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(screen.getByRole("button", { name: "저장 중…" })).toBeDisabled();
+    hold.release(savedOk());
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/customers"));
+    expect(writes(fetchMock)).toHaveLength(1);
+  });
+
+  it("등록이 실패하면 [저장] 이 다시 열려 고쳐서 재시도할 수 있다", async () => {
+    mockApi(() => fail(500, "INTERNAL_ERROR"));
+    render(<CustomerForm />);
+    const user = userEvent.setup();
+    await fillRequired(user);
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
+  });
+
+  it("비활성화 요청이 끝나기 전에는 [확인] 이 다시 눌리지 않는다", async () => {
+    const hold = pending();
+    const fetchMock = mockApi(() => hold.promise);
+    render(
+      <CustomerForm
+        customerId={1}
+        initialValues={EDIT_VALUES}
+        initialAssignedRepName="홍길동"
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "비활성화" }));
+
+    await user.click(await screen.findByRole("button", { name: "확인" }));
+
+    expect(screen.getByRole("button", { name: "확인" })).toBeDisabled();
+    hold.release(savedOk());
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/customers"));
+    expect(writes(fetchMock)).toHaveLength(1);
+  });
+
+  it("비활성화가 실패하면 닫힌 창 뒤의 [비활성화] 가 다시 열린다", async () => {
+    mockApi(() => fail(500, "INTERNAL_ERROR"));
+    render(
+      <CustomerForm
+        customerId={1}
+        initialValues={EDIT_VALUES}
+        initialAssignedRepName="홍길동"
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "비활성화" }));
+    await user.click(await screen.findByRole("button", { name: "확인" }));
+    await screen.findByRole("alert");
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "비활성화" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
   });
 });

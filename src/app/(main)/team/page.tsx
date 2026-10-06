@@ -291,7 +291,9 @@ export default function TeamReportsPage() {
         </Field>
 
         <Button type="submit" className="mt-6" disabled={loading}>
-          검색
+          {/* 다른 목록 화면(SCR-200·400·500)과 같은 진행 표시. 비활성만으로는
+              조회가 돌고 있는지 알 수 없다. */}
+          {loading ? "검색 중…" : "검색"}
         </Button>
       </form>
 

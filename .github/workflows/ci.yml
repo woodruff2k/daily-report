@@ -8,7 +8,7 @@ on:
 
 jobs:
   check:
-    name: Check (format, lint, typecheck, test, integration, build)
+    name: Check (format, lint, typecheck, prisma, test, integration, build)
     runs-on: ubuntu-latest
 
     # 통합 테스트 전용 DB. 자격증명은 이 컨테이너 안에서만 쓰는 더미다.
@@ -52,8 +52,36 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      # 스키마·마이그레이션 정합. 둘 다 DB 없이 단위 테스트를 통과하므로 어긋나도
+      # `npm test` 는 모른다. 통합 테스트는 마이그레이션만 적용하므로 schema.prisma 를
+      # 고치고 마이그레이션을 빠뜨려도, 그 테이블을 읽는 테스트가 없으면 통과한다.
+      # 인덱스·제약·열거형 변경은 어느 쪽으로도 드러나지 않는다. (#93)
+      #   1) validate: schema.prisma 문법. DATABASE_URL 은 형식만 필요한 더미다.
+      #   2) migrate diff: 마이그레이션을 빈 shadow DB 에 적용한 결과와 schema.prisma 의
+      #      차이. 다르면 종료 코드 2. shadow DB 는 서비스 컨테이너에 따로 만든다 —
+      #      Prisma 가 이 DB 를 비우므로 통합 테스트용 DB 를 쓰지 않는다.
+      - name: Prisma schema
+        run: |
+          npx prisma validate
+          # DROP 을 먼저 한다 — 없으면 두 번째 실행이 "already exists" 로 죽고,
+          # `bash -e` 라 migrate diff 가 아예 안 돈다. CI 는 매번 새 컨테이너라
+          # 문제가 없지만 이 블록을 로컬에서 그대로 따라 돌릴 수 있어야 한다.
+          echo "DROP DATABASE IF EXISTS daily_report_shadow;" | npx prisma db execute --url "$ADMIN_URL" --stdin
+          echo "CREATE DATABASE daily_report_shadow;" | npx prisma db execute --url "$ADMIN_URL" --stdin
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_URL" \
+            --exit-code
+        env:
+          DATABASE_URL: postgresql://user:pass@127.0.0.1:5432/db?schema=public
+          ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          SHADOW_URL: postgresql://postgres:postgres@127.0.0.1:5432/daily_report_shadow
+
+      # 커버리지를 같은 실행에서 잰다(테스트를 두 번 돌리지 않는다). 임계값은
+      # vitest.config.ts 에 있고, 현재 수치에서 내려가면 여기서 실패한다.
+      - name: Test (coverage)
+        run: npm run test:coverage
 
       # 실제 PostgreSQL 에 붙는 통합 테스트(목 없음). 스키마는 테스트의
       # globalSetup 이 `prisma migrate deploy` 로 맞추므로 여기서 마이그레이션하지

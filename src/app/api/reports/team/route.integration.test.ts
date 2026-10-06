@@ -139,6 +139,8 @@ describe("GET /api/reports/team (실제 DB)", () => {
     expect(result.body.data.content).toEqual([
       expect.objectContaining({
         reportId: Number(report.reportId),
+        reportDate: "2026-07-01",
+        status: "SUBMITTED",
         visitCount: 3,
         commentCount: 2,
         rep: { repId: Number(member.repId), name: member.name },

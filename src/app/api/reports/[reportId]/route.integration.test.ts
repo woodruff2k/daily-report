@@ -1,5 +1,6 @@
 // 통합 테스트(실제 PostgreSQL). 목으로는 확인할 수 없던 트랜잭션·잠금 동작을 검증한다.
-// 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-05, TC-SUB-03,
+// 덮는 TC: TC-RPT-05, TC-SEC-01, TC-VST-01, TC-VST-02, TC-VST-04, TC-VST-05,
+//          TC-VST-06(정책 미정 — 현재 동작 고정), TC-SUB-03,
 //          TC-CUS-05(비활성 고객의 과거 방문기록 유지), TC-NFR-01, TC-SEC-06
 // 이슈 #85(과제·계획 순서): 해당 TC 없음. 가장 가까운 것은 TC-PRB-01·TC-PLN-01(다중 저장).
 // 이슈 #87(과제·계획의 고객 이름): 해당 TC 없음. 가장 가까운 것은 TC-RPT-05·TC-SEC-06.
@@ -778,5 +779,212 @@ describe("과제·계획 순서 (실제 DB, 이슈 #85)", () => {
       "D",
       "E",
     ]);
+  });
+});
+
+// 이슈 #93: 뮤테이션 확인에서 `replaceReportContent` 의 삭제 조건(reportId)을 지워도 단위·
+// 통합 테스트가 모두 통과하는 곳이 있었다(계획). 목으로는 where 의 모양만 보이고, 실제로
+// 다른 보고의 행이 남는지는 DB 로만 확인된다.
+describe("PUT 전체 교체는 그 보고의 행만 건드린다 (실제 DB, IDOR·폭발 반경)", () => {
+  it("다른 보고의 방문·과제·계획은 이 보고를 비워도 지워지지 않는다", async () => {
+    const rep = await createRep();
+    const other = await createRep();
+    const customer = await createCustomer(rep.repId);
+    const mine = await createReport(rep.repId, { reportDate: "2026-07-01" });
+    const theirs = await createReport(other.repId, {
+      reportDate: "2026-07-01",
+    });
+    for (const report of [mine, theirs]) {
+      await createVisit(report.reportId, customer.customerId);
+      await prisma.reportProblem.create({
+        data: { reportId: report.reportId, content: "과제" },
+      });
+      await prisma.reportPlan.create({
+        data: { reportId: report.reportId, content: "계획" },
+      });
+    }
+
+    const result = await putReport(mine.reportId, rep, {
+      visits: [],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    const count = async (reportId: bigint) => ({
+      visits: await prisma.visitRecord.count({ where: { reportId } }),
+      problems: await prisma.reportProblem.count({ where: { reportId } }),
+      plans: await prisma.reportPlan.count({ where: { reportId } }),
+    });
+    expect(await count(mine.reportId)).toEqual({
+      visits: 0,
+      problems: 0,
+      plans: 0,
+    });
+    expect(await count(theirs.reportId)).toEqual({
+      visits: 1,
+      problems: 1,
+      plans: 1,
+    });
+  });
+
+  // 남의 보고의 행 식별자를 섞어 보내도 (IDOR) 그 행이 바뀌거나 가져와지지 않는다.
+  it.each([
+    ["visits", "VISIT_NOT_IN_REPORT"],
+    ["problems", "PROBLEM_NOT_IN_REPORT"],
+    ["plans", "PLAN_NOT_IN_REPORT"],
+  ] as const)(
+    "%s: 남의 보고의 행 식별자를 보내면 400 %s 이고 그 행은 그대로다",
+    async (kind, code) => {
+      const rep = await createRep();
+      const other = await createRep();
+      const customer = await createCustomer(rep.repId);
+      const mine = await createReport(rep.repId, { reportDate: "2026-07-01" });
+      const theirs = await createReport(other.repId, {
+        reportDate: "2026-07-01",
+      });
+      const foreign = {
+        visits: await createVisit(theirs.reportId, customer.customerId, {
+          content: "남의 방문",
+        }),
+        problems: await prisma.reportProblem.create({
+          data: { reportId: theirs.reportId, content: "남의 과제" },
+        }),
+        plans: await prisma.reportPlan.create({
+          data: { reportId: theirs.reportId, content: "남의 계획" },
+        }),
+      };
+      const foreignId = {
+        visits: { visitId: Number(foreign.visits.visitId) },
+        problems: { problemId: Number(foreign.problems.problemId) },
+        plans: { planId: Number(foreign.plans.planId) },
+      } as const;
+      const body = {
+        visits: [] as unknown[],
+        problems: [] as unknown[],
+        plans: [] as unknown[],
+        [kind]: [
+          {
+            ...foreignId[kind],
+            customerId: Number(customer.customerId),
+            visitType: "VISIT",
+            content: "가로채기",
+          },
+        ],
+      };
+
+      const result = await putReport(mine.reportId, rep, body);
+
+      expect(result.status).toBe(400);
+      expect(result.body.error.code).toBe(code);
+      const stillTheirs = {
+        visits: await prisma.visitRecord.findUniqueOrThrow({
+          where: { visitId: foreign.visits.visitId },
+        }),
+        problems: await prisma.reportProblem.findUniqueOrThrow({
+          where: { problemId: foreign.problems.problemId },
+        }),
+        plans: await prisma.reportPlan.findUniqueOrThrow({
+          where: { planId: foreign.plans.planId },
+        }),
+      };
+      expect(stillTheirs.visits).toMatchObject({
+        reportId: theirs.reportId,
+        content: "남의 방문",
+      });
+      expect(stillTheirs.problems).toMatchObject({
+        reportId: theirs.reportId,
+        content: "남의 과제",
+      });
+      expect(stillTheirs.plans).toMatchObject({
+        reportId: theirs.reportId,
+        content: "남의 계획",
+      });
+    },
+  );
+});
+
+describe("방문 행 수정·비활성 고객 (실제 DB)", () => {
+  it("TC-VST-04: visitId 를 포함해 PUT 하면 그 행이 수정되고 다른 행과 식별자는 그대로다", async () => {
+    const rep = await createRep();
+    const customerA = await createCustomer(rep.repId);
+    const customerB = await createCustomer(rep.repId);
+    const report = await createReport(rep.repId);
+    const first = await createVisit(report.reportId, customerA.customerId, {
+      content: "원래 내용",
+      sortOrder: 1,
+    });
+    const second = await createVisit(report.reportId, customerA.customerId, {
+      content: "손대지 않음",
+      sortOrder: 2,
+    });
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [
+        {
+          visitId: Number(first.visitId),
+          customerId: Number(customerB.customerId),
+          visitType: "CALL",
+          content: "고친 내용",
+          result: "고친 결과",
+          sortOrder: 1,
+        },
+        {
+          visitId: Number(second.visitId),
+          customerId: Number(customerA.customerId),
+          visitType: "VISIT",
+          content: "손대지 않음",
+          sortOrder: 2,
+        },
+      ],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    const rows = await prisma.visitRecord.findMany({
+      where: { reportId: report.reportId },
+      orderBy: { visitId: "asc" },
+    });
+    // 새로 만들고 지운 것이 아니라 같은 행을 고쳤다 — 식별자가 그대로다.
+    expect(rows.map((r) => r.visitId)).toEqual([first.visitId, second.visitId]);
+    expect(rows[0]).toMatchObject({
+      customerId: customerB.customerId,
+      visitType: "CALL",
+      content: "고친 내용",
+      result: "고친 결과",
+    });
+    expect(rows[1]).toMatchObject({
+      customerId: customerA.customerId,
+      content: "손대지 않음",
+    });
+    expect(
+      result.body.data.visits.map((v: { visitId: number }) => v.visitId),
+    ).toEqual([Number(first.visitId), Number(second.visitId)]);
+  });
+
+  // TC-VST-06 (Low): 명세는 "정책에 따른 처리(차단/경고)" 라고만 적고 정책을 정하지 않았다.
+  // **정책 결정 필요.** 아래는 현재 구현의 동작을 고정한다 — 비활성 고객으로의 저장을
+  // 막지 않는다(NFR-03: 과거 참조를 유지한다). 정책이 "차단" 으로 정해지면 이 테스트를
+  // 고쳐야 한다. 기존 행의 재저장은 위 TC-CUS-05 블록이 이미 덮고, 여기는 신규 행이다.
+  it("TC-VST-06: 비활성 고객으로 새 방문 행을 저장해도 막지 않고 저장한다 (현재 정책, 결정 필요)", async () => {
+    const rep = await createRep();
+    const customer = await createCustomer(rep.repId, { status: "INACTIVE" });
+    const report = await createReport(rep.repId);
+
+    const result = await putReport(report.reportId, rep, {
+      visits: [visitRow(customer.customerId, "비활성 고객 방문")],
+      problems: [],
+      plans: [],
+    });
+
+    expect(result.status).toBe(200);
+    const saved = await prisma.visitRecord.findFirstOrThrow({
+      where: { reportId: report.reportId },
+    });
+    expect(saved).toMatchObject({
+      customerId: customer.customerId,
+      content: "비활성 고객 방문",
+    });
   });
 });

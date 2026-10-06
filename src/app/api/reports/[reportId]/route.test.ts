@@ -240,6 +240,10 @@ describe("PUT /api/reports/{reportId}", () => {
     expect(prisma.reportProblem.deleteMany).toHaveBeenCalledWith({
       where: { reportId: 10n, problemId: { notIn: [] } },
     });
+    // reportId 조건이 빠지면 다른 보고의 계획까지 지운다(#93 뮤테이션 확인에서 통과했다).
+    expect(prisma.reportPlan.deleteMany).toHaveBeenCalledWith({
+      where: { reportId: 10n, planId: { notIn: [] } },
+    });
     expect(prisma.visitRecord.createMany).not.toHaveBeenCalled();
   });
 
@@ -259,6 +263,32 @@ describe("PUT /api/reports/{reportId}", () => {
     const rows = vi.mocked(prisma.visitRecord.createMany).mock.calls[0][0]
       ?.data as { sortOrder: number }[];
     expect(rows.map((row) => row.sortOrder)).toEqual([1, 2]);
+  });
+
+  it("방문의 sortOrder 를 모두 보내면 그 값을 저장한다 (생성·수정 모두)", async () => {
+    // 과제·계획은 아래 테스트가 보지만 방문은 명시값을 무시해도 통과했다(#93).
+    await put({
+      visits: [
+        { customerId: 5, visitType: "VISIT", content: "a", sortOrder: 5 },
+        {
+          visitId: 100,
+          customerId: 5,
+          visitType: "CALL",
+          content: "b",
+          sortOrder: 8,
+        },
+      ],
+      problems: [],
+      plans: [],
+    });
+
+    const created = vi.mocked(prisma.visitRecord.createMany).mock.calls[0][0]
+      ?.data as { sortOrder: number }[];
+    expect(created.map((row) => row.sortOrder)).toEqual([5]);
+    expect(prisma.visitRecord.updateMany).toHaveBeenCalledWith({
+      where: { visitId: 100n, reportId: 10n },
+      data: expect.objectContaining({ sortOrder: 8 }),
+    });
   });
 
   // 이슈 #85. 해당 TC 없음(가장 가까운 것: TC-PRB-01, TC-PLN-01).

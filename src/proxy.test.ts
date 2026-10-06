@@ -34,8 +34,15 @@ function bearer(path: string) {
 
 async function errorBody(response: Response) {
   const body = (await response.json()) as {
+    success: boolean;
+    data: unknown;
     error: { code: string; message: string } | null;
   };
+  // 클라이언트(apiFetch)는 `success` 로 성공·실패를 가른다. 프록시가 직접 만드는
+  // 401·403 도 공통 응답 구조(API 명세 1.2)를 따라야 한다. 이 단언이 없을 때
+  // `success: false` 를 `true` 로 바꿔도 테스트가 통과했다(#93 뮤테이션 확인).
+  expect(body.success).toBe(false);
+  expect(body.data).toBeNull();
   return body.error;
 }
 

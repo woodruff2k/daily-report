@@ -447,3 +447,94 @@ describe("오류 처리", () => {
     expect(window.localStorage.getItem("daily-report.accessToken")).toBeNull();
   });
 });
+
+// #93: 뮤테이션 확인에서 아래 분기를 뒤집어도 기존 테스트가 통과했다.
+describe("댓글 쓰기 — #93 보강", () => {
+  // **호출마다 새 Response 를 만든다.** 한 인스턴스를 재사용하면 본문을 한 번만
+  // 읽을 수 있어, 재시도하는 테스트(실패 → 다시 [등록])에서 두 번째 쓰기가
+  // 403/500 이 아니라 "Body is unusable" 로 터지고 컴포넌트 버그처럼 보인다.
+  const writeFailing = (makeResponse: () => Response) => {
+    const state = { threads: THREADS };
+    return mockServer(state, () => makeResponse());
+  };
+
+  it("등록이 403 이면 서버가 준 문장을 그대로 보인다", async () => {
+    // 서버는 403 마다 정확한 사유를 준다(조회 범위 밖·역할·본인 댓글 아님). 한 문장으로
+    // 덮으면 맞지 않는 안내가 나간다.
+    const user = userEvent.setup();
+    login(MANAGER);
+    writeFailing(() => fail(403, "FORBIDDEN"));
+    show();
+    await screen.findByText("견적 일정 확인 바람");
+
+    await user.type(screen.getByLabelText("댓글 내용"), "내용");
+    await user.click(screen.getByRole("button", { name: "등록" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("서버 문장");
+  });
+
+  it("등록이 403 인데 서버가 문장을 주지 않으면 기본 권한 문구로 돌아간다", async () => {
+    const user = userEvent.setup();
+    login(MANAGER);
+    writeFailing(() =>
+      json(403, {
+        success: false,
+        data: null,
+        error: { code: "FORBIDDEN", message: "" },
+      }),
+    );
+    show();
+    await screen.findByText("견적 일정 확인 바람");
+
+    await user.type(screen.getByLabelText("댓글 내용"), "내용");
+    await user.click(screen.getByRole("button", { name: "등록" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이 보고에 대한 댓글 권한이 없습니다",
+    );
+  });
+
+  it("등록이 실패하면 입력한 내용이 남고 버튼이 다시 열린다", async () => {
+    // 성공으로 오인해 입력을 비우면 사용자가 쓴 글이 사라진다. 실패 뒤 버튼이 잠긴 채
+    // 남으면 다시 시도할 수 없다.
+    const user = userEvent.setup();
+    login(MANAGER);
+    writeFailing(() => fail(500, "INTERNAL_ERROR"));
+    show();
+    await screen.findByText("견적 일정 확인 바람");
+
+    await user.type(screen.getByLabelText("댓글 내용"), "남아야 하는 글");
+    await user.click(screen.getByRole("button", { name: "등록" }));
+    await screen.findByRole("alert");
+
+    expect(screen.getByLabelText("댓글 내용")).toHaveValue("남아야 하는 글");
+    expect(screen.getByRole("button", { name: "등록" })).toBeEnabled();
+  });
+
+  it("등록하는 동안 [등록] 이 눌리지 않아 같은 댓글이 두 번 올라가지 않는다", async () => {
+    const user = userEvent.setup();
+    login(MANAGER);
+    let release!: (response: Response) => void;
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((_input, init) => {
+        if ((init?.method ?? "GET") === "GET")
+          return Promise.resolve(ok(THREADS));
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      });
+    show();
+    await screen.findByText("견적 일정 확인 바람");
+
+    await user.type(screen.getByLabelText("댓글 내용"), "내용");
+    await user.click(screen.getByRole("button", { name: "등록" }));
+
+    expect(screen.getByRole("button", { name: "등록" })).toBeDisabled();
+    release(new Response(null, { status: 204 }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "등록" })).toBeEnabled(),
+    );
+    expect(calls(fetchMock, "POST")).toHaveLength(1);
+  });
+});

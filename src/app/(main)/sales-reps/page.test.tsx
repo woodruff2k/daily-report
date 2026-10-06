@@ -197,3 +197,27 @@ describe("SCR-500 영업 마스터 목록 — #17", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
 });
+
+// #93: 뮤테이션 확인에서 검색 중 잠금을 지우거나 끝난 뒤 풀지 않아도 통과했다.
+describe("SCR-500 검색 중 잠금 — #93", () => {
+  it("검색하는 동안 [검색] 은 눌리지 않고 끝나면 다시 열린다", async () => {
+    let release!: (response: Response) => void;
+    let calls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) return Promise.resolve(pageResponse(ROWS));
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+    });
+    const user = userEvent.setup();
+    render(<SalesRepListPage />);
+    await screen.findByText("S2026002");
+
+    await user.click(screen.getByRole("button", { name: "검색" }));
+
+    expect(screen.getByRole("button", { name: "검색 중…" })).toBeDisabled();
+    release(pageResponse(ROWS));
+    expect(await screen.findByRole("button", { name: "검색" })).toBeEnabled();
+  });
+});

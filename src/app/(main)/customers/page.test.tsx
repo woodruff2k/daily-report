@@ -318,3 +318,27 @@ describe("SCR-400 고객 마스터 목록 — #16", () => {
     }
   });
 });
+
+// #93: 뮤테이션 확인에서 검색 중 잠금을 지우거나 끝난 뒤 풀지 않아도 통과했다.
+describe("SCR-400 검색 중 잠금 — #93", () => {
+  it("검색하는 동안 [검색] 은 눌리지 않고 끝나면 다시 열린다", async () => {
+    let release!: (response: Response) => void;
+    let calls = 0;
+    mockApi(() => {
+      calls += 1;
+      if (calls === 1) return ok(pageData(ROWS));
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      }) as unknown as Response;
+    });
+    const user = userEvent.setup();
+    render(<CustomerListPage />);
+    await screen.findByText("테스트고객");
+
+    await user.click(screen.getByRole("button", { name: "검색" }));
+
+    expect(screen.getByRole("button", { name: "검색 중…" })).toBeDisabled();
+    release(ok(pageData(ROWS)));
+    expect(await screen.findByRole("button", { name: "검색" })).toBeEnabled();
+  });
+});
