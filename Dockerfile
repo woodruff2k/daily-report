@@ -26,6 +26,9 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nextjs
 
+# public/ 는 비어 있어도 디렉터리가 있어야 한다. standalone 출력은 public 을
+# 포함하지 않으므로(Next 공식 문서) 이 COPY 가 필요하고, 디렉터리가 없으면
+# 빌드가 "/app/public: not found" 로 실패한다. 그래서 public/.gitkeep 을 둔다.
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
