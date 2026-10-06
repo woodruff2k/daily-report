@@ -9,6 +9,29 @@ import { prisma, type DbClient } from "./prisma";
  * `passwordHash`를 의도적으로 제외한다. Prisma 모델을 그대로 직렬화하면
  * 해시가 그대로 나가므로(NFR-04), 내보낼 필드를 명시적으로 나열한다.
  */
+/**
+ * 등록 응답(API 명세 6.2). 비밀번호를 생략하면 임시 비밀번호가 **1회만** 담겨 온다.
+ *
+ * 이 타입을 두는 이유는 라우트가 객체 리터럴로 만들면 **화면 타입과 묶을 대상이
+ * 없어서**다. `temporaryPassword` 가 이름만 바뀌어도 화면은 `undefined` 를 받고
+ * "관리자가 비밀번호를 지정한 경우" 로 읽어 **임시 비밀번호의 유일한 사본을 잃는다**
+ * — `tsc` 도 테스트도 아무 신호를 주지 않는다. (이슈 #96)
+ */
+export interface CreatedSalesRepResponse extends SalesRepResponse {
+  temporaryPassword?: string;
+}
+
+/**
+ * 비밀번호 재발급 응답(API 명세 6.5). 위와 같은 이유로 타입을 둔다 — 화면이
+ * `result.temporaryPassword` 를 그대로 화면에 띄우므로 이름이 바뀌면
+ * "임시 비밀번호: undefined" 가 사용자에게 보인다.
+ */
+export interface ResetPasswordResponse {
+  repId: number;
+  empNo: string;
+  temporaryPassword: string;
+}
+
 export interface SalesRepResponse {
   repId: number;
   empNo: string;
