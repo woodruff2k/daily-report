@@ -48,10 +48,25 @@ test-coverage:
 build:
 	docker build $(PLATFORM_FLAG) --tag $(IMAGE):$(TAG) .
 
+# 로컬에서 운영 이미지를 띄워 본다. make db-up 으로 DB 가 떠 있어야 한다.
+#
+# .env 를 --env-file 로 넘기지 않는다. docker 의 --env-file 은 셸·dotenv 와 달리
+# 따옴표를 벗기지 않아서, .env 의 DATABASE_URL="postgresql://..." 가 컨테이너 안에서
+# 따옴표까지 포함된 값이 된다. Prisma 가 "the URL must start with the protocol
+# postgresql://" 로 죽는다. JWT_SECRET 은 더 나쁘다 — 어떤 문자열이든 HMAC 키로
+# 유효해서 조용히 다른 비밀로 서명한다.
+#
+# 그리고 .env 의 URL 은 호스트 기준(localhost:5433)이라 컨테이너 안에서는 자기
+# 자신을 가리킨다. 그래서 compose 네트워크에 붙고 서비스 이름으로 접속한다.
+#
+# 아래 자격증명은 docker-compose.yml 에 그대로 있는 로컬 전용 더미다. 실제
+# 시크릿이 아니고, 운영에서는 Secret Manager 가 주입한다.
 .PHONY: run
 run:
 	docker run --rm -p 8080:8080 \
-	  --env-file .env \
+	  --network daily-report_default \
+	  -e DATABASE_URL="postgresql://postgres:postgres@postgres:5432/daily_report?schema=public" \
+	  -e JWT_SECRET="local-docker-run-only-not-a-real-secret" \
 	  $(IMAGE):$(TAG)
 
 # ── Artifact Registry ─────────────────────────────────────────
