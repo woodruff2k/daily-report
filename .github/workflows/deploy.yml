@@ -1,13 +1,20 @@
 name: Deploy to Cloud Run
 
-# 자동 배포는 Issue #20(GCP 리소스 프로비저닝)까지 보류한다.
-# WIF_PROVIDER / WIF_SERVICE_ACCOUNT 시크릿이 없어 GCP 인증 단계에서 반드시 실패하므로,
-# main 푸시마다 실패 알림이 쌓이는 것을 막기 위해 push 트리거를 잠시 꺼둔다.
-# Issue #20 착수 시 아래 push 블록의 주석을 해제한다.
+# main 푸시마다 검사를 돌리고, 배포는 저장소 변수로 켠다.
+#
+# 트리거는 켜 두지만 deploy 잡은 DEPLOY_ENABLED 가 'true' 일 때만 돈다. 아직
+# WIF_PROVIDER / WIF_SERVICE_ACCOUNT 가 없어 인증 단계에서 반드시 실패하므로,
+# 변수가 없으면 deploy 는 skip 되고 워크플로는 초록으로 끝난다. 트리거를 주석
+# 처리해 두는 것보다 이쪽이 낫다 — 주석은 verify 까지 함께 죽인다.
+#
+# GCP 리소스를 만든 뒤 켠다:
+#   gh variable set DEPLOY_ENABLED --body true
+# 다시 끄려면:
+#   gh variable delete DEPLOY_ENABLED
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
 
 env:
   PROJECT_ID: "fluid-skyline-430301-d0"
@@ -17,23 +24,23 @@ env:
   IMAGE: asia-northeast3-docker.pkg.dev/fluid-skyline-430301-d0/daily-report/app
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
+  # 게이트는 ci.yml 을 그대로 재사용한다. 전에는 이 자리에 lint + npm test 만
+  # 있어서 format·typecheck·prisma 정합·통합 테스트·커버리지·build 를 건너뛰었다.
+  # 두 곳에 같은 검사를 복사해 두면 또 갈라진다 — PR #92 에서 CI 에 typecheck 가
+  # 없어 main 이 tsc 3건 실패 상태로 초록이던 일이 있었다. (#93)
+  verify:
+    name: Verify
+    uses: ./.github/workflows/ci.yml
 
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: verify
+    # DEPLOY_ENABLED 로 켜고, main 에서만 배포한다. workflow_dispatch 는 어떤
+    # 브랜치에서도 실행할 수 있어서 ref 를 함께 본다 — 검사는 그 브랜치에서
+    # 돌지만 배포는 되지 않는다. 브랜치 배포가 필요해지면 ref 조건을 떼고
+    # 환경(environment) 승인을 붙이는 쪽이 맞다.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
     permissions:
       contents: read
       id-token: write # Workload Identity Federation 필수

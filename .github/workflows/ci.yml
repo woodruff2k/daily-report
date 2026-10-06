@@ -1,10 +1,14 @@
 name: CI
 
+# push: branches: [main] 은 일부러 두지 않는다. main 푸시에는 deploy.yml 이
+# 이 워크플로를 workflow_call 로 불러 같은 검사를 돌린다 — 양쪽에 두면 main
+# 푸시마다 3분짜리 실행이 두 번 돌고 상태 표시도 둘로 갈린다.
+# deploy.yml 의 verify 잡은 DEPLOY_ENABLED 와 무관하게 항상 돌므로, 배포가
+# 꺼져 있어도 main 은 검사를 받는다.
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+  workflow_call:
 
 jobs:
   check:
