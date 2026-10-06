@@ -17,6 +17,7 @@
 import type { Role } from "@/types/auth";
 import type { ReportStatus } from "@/types/report";
 import { AuthorizationError, ConflictError } from "./errors";
+import { JwtConfigError, verifyAccessToken } from "./jwt";
 
 function unauthorized(message: string): AuthorizationError {
   return new AuthorizationError("UNAUTHORIZED", message, 401);
@@ -26,7 +27,7 @@ function forbidden(message: string): AuthorizationError {
   return new AuthorizationError("FORBIDDEN", message, 403);
 }
 
-/** 프록시(`src/proxy.ts`)가 검증한 토큰에서 추출한 요청자 정보. */
+/** 요청의 `Authorization: Bearer` 토큰에서 서명을 검증해 추출한 요청자 정보. */
 export interface AuthContext {
   repId: bigint;
   role: Role;
@@ -45,31 +46,66 @@ function isRole(value: string): value is Role {
 }
 
 /**
- * 프록시가 심어둔 요청 헤더에서 인증 컨텍스트를 읽는다.
+ * `Authorization: Bearer` 토큰의 서명을 검증해 인증 컨텍스트를 만든다.
  *
- * 헤더는 프록시를 거친 요청에만 존재한다. 값이 없거나 형식이 어긋나면
- * 프록시를 우회한 요청으로 보고 401로 막는다.
+ * 요청 헤더 중 `x-user-*` 같은 값은 읽지 않는다. 클라이언트가 설정할 수 있는
+ * 헤더는 신뢰 경계가 될 수 없다. 프록시가 우회되면(예: next 의 GHSA-6gpp-xcg3-4w24)
+ * 공격자가 넣은 헤더가 그대로 핸들러에 닿기 때문이다. 서명된 토큰만 신뢰한다.
+ * (이슈 #102)
+ *
+ * ## 왜 여기서는 DB 를 보지 않는가 (tokenVersion·status 판단)
+ *
+ * 이 함수는 서명·만료·payload 형식만 검증한다. 서버측 무효화(`tokenVersion`,
+ * 계정 `status`)는 프록시(`src/proxy.ts`)만 검증한다. 여기서까지 하면 요청마다
+ * DB 조회가 2회가 된다. 그 대가로 얻는 것은 "프록시가 우회될 때 이미 무효화된
+ * 토큰이 통과" 하는 틈을 막는 것뿐이다.
+ *
+ * 우회가 일어나도 공격자는 **유효하게 서명된 토큰을 이미 가지고 있어야** 한다.
+ * 위장은 불가능하고, 영향은 "로그아웃·비밀번호 변경·비활성화·역할 변경 뒤에도
+ * 토큰 만료(8h)까지 쓸 수 있다" 로 줄어든다. 이 위험을 받아들이고 요청당 DB
+ * 조회를 1회로 유지한다. 라우트에서도 무효화를 검증해야 하는 요구가 생기면
+ * (예: 비활성 계정의 쓰기를 즉시 막아야 하는 API) 그 라우트만 조회를 더한다.
+ * `mustChangePassword` 게이트도 프록시에만 있다. 같은 이유다.
+ *
+ * 토큰이 없거나 서명·만료가 어긋나면 401 이다. 오류 메시지에 검증 실패의 상세
+ * 사유(서명 불일치·만료 등)를 담지 않는다.
  */
 export function parseAuthContext(headers: Headers): AuthContext {
-  const rawRepId = headers.get("x-user-rep-id");
-  const rawRole = headers.get("x-user-role");
+  const authorization = headers.get("authorization");
+  const token = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : null;
 
-  if (!rawRepId || !rawRole) {
+  if (!token) {
     throw unauthorized("인증이 필요합니다.");
   }
 
-  if (!isRole(rawRole)) {
-    throw unauthorized("유효하지 않은 권한 정보입니다.");
+  let payload;
+  try {
+    payload = verifyAccessToken(token);
+  } catch (error) {
+    // 설정 오류(JWT_SECRET 부재)를 401 로 바꾸지 않는다. 바꾸면 비밀이 주입되지
+    // 않은 배포가 "모든 토큰이 무효" 로 보이고 화면이 전원을 로그아웃시킨다.
+    // 명세 1.4 도 분류되지 않은 서버 오류를 권한 오류로 바꾸지 말라고 적는다.
+    if (error instanceof JwtConfigError) {
+      throw error;
+    }
+    throw unauthorized("유효하지 않은 토큰입니다.");
+  }
+
+  // 서명이 유효해도 payload 형식까지 보장되지는 않는다.
+  if (typeof payload.role !== "string" || !isRole(payload.role)) {
+    throw unauthorized("유효하지 않은 토큰입니다.");
   }
 
   let repId: bigint;
   try {
-    repId = BigInt(rawRepId);
+    repId = BigInt(payload.repId);
   } catch {
-    throw unauthorized("유효하지 않은 사용자 식별자입니다.");
+    throw unauthorized("유효하지 않은 토큰입니다.");
   }
 
-  return { repId, role: rawRole };
+  return { repId, role: payload.role };
 }
 
 /** 요청자가 해당 리소스의 소유자인지 여부. */

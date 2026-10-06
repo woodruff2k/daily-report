@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import type { SalesRep } from "@prisma/client";
 
 /** 합성 데이터. 실제 직원 정보를 쓰지 않는다. (테스트 명세 1.4) */
@@ -33,8 +34,12 @@ export const MANAGER_REP: SalesRep = {
   role: "MANAGER",
 };
 
-const ADMIN_HEADERS = { "x-user-rep-id": "9", "x-user-role": "ADMIN" };
-const SALES_REP_HEADERS = { "x-user-rep-id": "1", "x-user-role": "SALES_REP" };
+// 토큰은 **호출 시점에** 만든다(다른 픽스처와 같은 방식). 모듈 로드 때 서명하면
+// 두 가지로 조용히 깨진다(#102 검토).
+//   1. `vi.mock("@/lib/jwt")` 를 쓰는 파일이 이 픽스처를 import 하면 목이 잡혀
+//      토큰이 아닌 값이 들어가고 모든 요청이 사유 없이 401 이 된다.
+//   2. 이 저장소는 `vi.useFakeTimers({ toFake: ["Date"], now: ... })` 를 쓴다.
+//      가짜 시각이 import 시점보다 8h 뒤면 모든 토큰이 만료된다.
 
 interface RequestOptions {
   method?: string;
@@ -57,7 +62,7 @@ function request(
 export function asAdmin(url: string, options: RequestOptions = {}) {
   return request(url, {
     ...options,
-    headers: { ...ADMIN_HEADERS, ...options.headers },
+    headers: { ...bearerHeaders(9, "ADMIN"), ...options.headers },
   });
 }
 
@@ -65,7 +70,7 @@ export function asAdmin(url: string, options: RequestOptions = {}) {
 export function asSalesRep(url: string, options: RequestOptions = {}) {
   return request(url, {
     ...options,
-    headers: { ...SALES_REP_HEADERS, ...options.headers },
+    headers: { ...bearerHeaders(1, "SALES_REP"), ...options.headers },
   });
 }
 

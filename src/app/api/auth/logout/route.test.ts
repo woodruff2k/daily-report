@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { bearerHeaders } from "@/test/auth-headers";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/prisma", () => ({
@@ -13,7 +14,7 @@ const URL = "http://localhost/api/auth/logout";
 function asSelf() {
   return new NextRequest(URL, {
     method: "POST",
-    headers: { "x-user-rep-id": "1", "x-user-role": "SALES_REP" },
+    headers: bearerHeaders(1, "SALES_REP"),
   });
 }
 

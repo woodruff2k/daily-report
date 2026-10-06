@@ -1,4 +1,7 @@
+import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
+import { JwtConfigError } from "@/lib/jwt";
+import { TEST_JWT_SECRET } from "@/test/integration/test-database";
 import {
   assertAnyRole,
   assertCanComment,
@@ -42,36 +45,138 @@ function expectHttpError(
   }
 }
 
+// 덮는 TC: TC-AUTH-04(토큰 없음 401), TC-SEC-01~04 의 전제(요청자 신원).
+// 위조 헤더(`x-user-*`)로 신원을 속이는 경우에 해당하는 TC 는 테스트 명세서에 **없다**
+// — 이슈 #102 의 수용 기준으로 추가했다. 명세서에 TC 가 생기면 번호를 붙인다.
+const CLAIMS = {
+  repId: "42",
+  name: "테스트사용자",
+  role: "MANAGER",
+  mustChangePassword: false,
+  tokenVersion: 0,
+} as const;
+
+function bearer(token: string): Headers {
+  return headers({ authorization: `Bearer ${token}` });
+}
+
+function signedWith(secret: string, claims: object = CLAIMS, options = {}) {
+  return jwt.sign(claims, secret, options);
+}
+
 describe("parseAuthContext", () => {
-  it("프록시가 심은 헤더를 컨텍스트로 변환한다", () => {
-    const auth = parseAuthContext(
-      headers({ "x-user-rep-id": "42", "x-user-role": "MANAGER" }),
-    );
+  it("서명된 토큰을 컨텍스트로 변환한다", () => {
+    const auth = parseAuthContext(bearer(signedWith(TEST_JWT_SECRET)));
     expect(auth).toEqual({ repId: 42n, role: "MANAGER" });
   });
 
-  it("헤더가 없으면 401로 막는다", () => {
+  it("Authorization 이 없으면 401로 막는다", () => {
     expectHttpError(() => parseAuthContext(headers({})), 401);
   });
 
-  it("역할 값이 정의되지 않은 것이면 401로 막는다", () => {
+  it("Bearer 접두사가 없으면 401로 막는다", () => {
     expectHttpError(
       () =>
         parseAuthContext(
-          headers({ "x-user-rep-id": "1", "x-user-role": "SUPERUSER" }),
+          headers({ authorization: signedWith(TEST_JWT_SECRET) }),
         ),
       401,
     );
   });
 
-  it("사원 식별자가 숫자가 아니면 401로 막는다", () => {
+  it("위조 헤더만 있고 토큰이 없으면 401로 막는다 (#102)", () => {
+    // 프록시가 우회돼 공격자가 직접 넣은 헤더가 도달한 상황이다.
     expectHttpError(
       () =>
         parseAuthContext(
-          headers({ "x-user-rep-id": "abc", "x-user-role": "SALES_REP" }),
+          headers({ "x-user-rep-id": "1", "x-user-role": "ADMIN" }),
         ),
       401,
     );
+  });
+
+  it("JWT_SECRET 이 없으면 401 이 아니라 설정 오류로 던진다 (#102 검토)", () => {
+    // 401 로 바꾸면 비밀이 주입되지 않은 배포가 "모든 토큰이 무효" 로 보이고 화면이
+    // 전원을 로그아웃시킨다. 명세 1.4 도 서버 오류를 권한 오류로 바꾸지 말라고 한다.
+    const token = signedWith(TEST_JWT_SECRET);
+    const saved = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = "";
+    try {
+      expect(() => parseAuthContext(bearer(token))).toThrow(JwtConfigError);
+    } finally {
+      process.env.JWT_SECRET = saved;
+    }
+  });
+
+  it("HS256 이 아닌 알고리즘으로 서명한 토큰은 401로 막는다 (#102)", () => {
+    // jsonwebtoken 9 는 alg=none 은 거부하지만 HS384·HS512 는 받아들인다. 지금은
+    // 비밀을 모르면 어떤 HS 로도 서명할 수 없어 악용 경로가 없지만, 검증이 받아들이는
+    // 집합을 발급이 만드는 것과 같게 고정해 둔다(jwt.ts 의 ALGORITHM).
+    expectHttpError(
+      () =>
+        parseAuthContext(
+          bearer(signedWith(TEST_JWT_SECRET, CLAIMS, { algorithm: "HS512" })),
+        ),
+      401,
+    );
+  });
+
+  it("다른 비밀로 서명한 토큰은 401로 막는다", () => {
+    expectHttpError(
+      () => parseAuthContext(bearer(signedWith("some-other-secret"))),
+      401,
+    );
+  });
+
+  it("서명이 없는 토큰(alg=none)은 401로 막는다", () => {
+    const unsigned = jwt.sign(CLAIMS, "", { algorithm: "none" });
+    expectHttpError(() => parseAuthContext(bearer(unsigned)), 401);
+  });
+
+  it("만료된 토큰은 401로 막는다", () => {
+    const expired = signedWith(TEST_JWT_SECRET, CLAIMS, { expiresIn: -10 });
+    expectHttpError(() => parseAuthContext(bearer(expired)), 401);
+  });
+
+  it("형식이 깨진 토큰은 401로 막는다", () => {
+    expectHttpError(() => parseAuthContext(bearer("not-a-jwt")), 401);
+  });
+
+  it("헤더가 토큰의 역할과 사원 식별자를 덮지 못한다 (#102)", () => {
+    const token = signedWith(TEST_JWT_SECRET, {
+      ...CLAIMS,
+      repId: "1",
+      role: "SALES_REP",
+    });
+
+    const auth = parseAuthContext(
+      headers({
+        authorization: `Bearer ${token}`,
+        "x-user-rep-id": "9",
+        "x-user-role": "ADMIN",
+      }),
+    );
+
+    expect(auth).toEqual({ repId: 1n, role: "SALES_REP" });
+  });
+
+  it("서명이 유효해도 역할이 정의되지 않은 것이면 401로 막는다", () => {
+    const token = signedWith(TEST_JWT_SECRET, { ...CLAIMS, role: "SUPERUSER" });
+    expectHttpError(() => parseAuthContext(bearer(token)), 401);
+  });
+
+  it("서명이 유효해도 사원 식별자가 숫자가 아니면 401로 막는다", () => {
+    const token = signedWith(TEST_JWT_SECRET, { ...CLAIMS, repId: "abc" });
+    expectHttpError(() => parseAuthContext(bearer(token)), 401);
+  });
+
+  it("실패 응답에 검증 실패의 상세 사유를 담지 않는다", () => {
+    try {
+      parseAuthContext(bearer(signedWith("some-other-secret")));
+      expect.unreachable();
+    } catch (error) {
+      expect((error as HttpError).message).toBe("유효하지 않은 토큰입니다.");
+    }
   });
 });
 

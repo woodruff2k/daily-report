@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { JwtConfigError } from "@/lib/jwt";
 
-vi.mock("@/lib/jwt", () => ({
+// `JwtConfigError` 는 실제 클래스를 보존한다. proxy 가 `instanceof` 로 설정 오류와
+// 토큰 오류를 가르므로, 목이 그 export 를 빼면 비교 자체가 터진다. (#102 검토)
+vi.mock("@/lib/jwt", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jwt")>()),
   verifyAccessToken: vi.fn(),
 }));
 
@@ -83,6 +87,15 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
     );
   });
 
+  it("설정 오류(JWT_SECRET 부재)는 401 로 바꾸지 않고 던진다 (#102 검토)", async () => {
+    // 401 로 바꾸면 비밀이 주입되지 않은 배포가 "모든 토큰이 무효" 로 보인다.
+    vi.mocked(verifyAccessToken).mockImplementation(() => {
+      throw new JwtConfigError("JWT_SECRET 환경 변수가 설정되지 않았습니다.");
+    });
+
+    await expect(proxy(bearer("/api/reports"))).rejects.toThrow(JwtConfigError);
+  });
+
   it("검증 실패 응답에 내부 오류 메시지가 실리지 않는다", async () => {
     vi.mocked(verifyAccessToken).mockImplementation(() => {
       throw new Error("jwt malformed: secret mismatch");
@@ -105,19 +118,26 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
 });
 
 describe("proxy — 유효 토큰", () => {
-  it("검증한 사용자 정보를 요청 헤더에 심는다", async () => {
+  it("사용자 정보를 요청 헤더에 심지 않는다 (#102)", async () => {
     const response = await proxy(bearer("/api/reports"));
 
-    // parseAuthContext 가 읽는 두 헤더다. 이름이 바뀌면 인가 전체가 401 로 막힌다.
-    expect(response.headers.get("x-middleware-override-headers")).toContain(
-      "x-user-rep-id",
+    // 라우트가 토큰 서명을 직접 검증한다. 헤더를 신뢰 경계로 쓰지 않는다.
+    expect(response.headers.get("x-middleware-override-headers")).toBeNull();
+    expect(
+      response.headers.get("x-middleware-request-x-user-rep-id"),
+    ).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-user-role")).toBeNull();
+  });
+
+  it("위조 헤더만 보내고 토큰이 없으면 401 이다 (#102)", async () => {
+    const response = await proxy(
+      request("/api/reports", {
+        "x-user-rep-id": "1",
+        "x-user-role": "ADMIN",
+      }),
     );
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
-      "1",
-    );
-    expect(response.headers.get("x-middleware-request-x-user-role")).toBe(
-      "SALES_REP",
-    );
+
+    expect(response.status).toBe(401);
   });
 
   it("토큰 문자열만 떼어 검증에 넘긴다", async () => {
@@ -184,14 +204,6 @@ describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
 
   it("로그아웃은 통과시킨다", async () => {
     expect((await proxy(bearer("/api/auth/logout"))).status).toBe(200);
-  });
-
-  it("통과하는 경로에는 인증 헤더를 그대로 심는다", async () => {
-    const response = await proxy(bearer("/api/me/password"));
-
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
-      "1",
-    );
   });
 
   it("플래그가 내려가면 다시 통과한다", async () => {

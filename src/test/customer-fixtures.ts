@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import type { Customer } from "@prisma/client";
 
 /** 합성 데이터. 실제 고객 정보를 쓰지 않는다. (테스트 명세 1.4) */
@@ -35,20 +36,12 @@ export const CUSTOMER_WITH_SCOPE = {
 
 /** 담당자와 무관한 영업사원(repId 7). */
 export function asStranger(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "7", "x-user-role": "SALES_REP" },
-    options,
-  );
+  return request(url, bearerHeaders(7, "SALES_REP"), options);
 }
 
 /** 다른 팀 상급자(repId 8). 담당 영업의 상급자가 아니다. */
 export function asOtherTeamManager(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "8", "x-user-role": "MANAGER" },
-    options,
-  );
+  return request(url, bearerHeaders(8, "MANAGER"), options);
 }
 
 /** 담당 영업으로 지정 가능한 활성 사원. */
@@ -83,28 +76,16 @@ function request(
 }
 
 export function asSalesRep(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "1", "x-user-role": "SALES_REP" },
-    options,
-  );
+  return request(url, bearerHeaders(1, "SALES_REP"), options);
 }
 
 export function asManager(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "2", "x-user-role": "MANAGER" },
-    options,
-  );
+  return request(url, bearerHeaders(2, "MANAGER"), options);
 }
 
 /** 고객 마스터는 관리자 담당이 아니다. 403이어야 한다. */
 export function asAdmin(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "9", "x-user-role": "ADMIN" },
-    options,
-  );
+  return request(url, bearerHeaders(9, "ADMIN"), options);
 }
 
 export function withoutAuth(url: string, options?: RequestOptions) {
