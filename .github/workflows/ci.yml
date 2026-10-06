@@ -42,13 +42,16 @@ jobs:
 
       # 의존성 취약점 리포트(#97). 비차단(continue-on-error)으로 둔다.
       #  - 차단(--audit-level=critical)은 지금 켜면 바로 빨개진다: 전체 audit 에
-      #    next(RCE 권고)·proxy-addr 가 critical 로 남아 있다. 올림은 별도 이슈다.
+      #    proxy-addr 가 critical 로 남아 있다(shadcn → MCP SDK 경유, 개발 전용).
+      #    #102 로 next 권고는 없어졌으니 그 하나만 정리되면 차단으로 올릴 수 있다.
       #  - 건수를 0 으로 만드는 것이 목적이 아니다. 전이 의존은 상위 패키지가 올라가야
       #    사라지고 `npm audit fix --force` 는 prisma 를 6.12.0 으로 *내린다*.
-      #  - 전체(dev 포함)로 본다. 이 프로젝트는 next·react·prisma 가 devDependencies 에
-      #    있어 `--omit=dev` 는 next 를 통째로 빼먹는다(운영 번들에는 들어가는데도).
-      #  - 남아 있는 건과 "왜 괜찮은지"는 이슈 #97 에 정리했다. prisma 3건은 CLI 전용
-      #    (운영 이미지에 없음)이고 6.x 안에는 fix 가 없다.
+      #  - 전체(dev 포함)로 본다. `--omit=dev` 는 빌드·테스트 도구 체인을 못 봐서,
+      #    빌드 머신에서 도는 것을 놓친다. (next·react 는 #102 에서 dependencies 로
+      #    옮겨 이제 양쪽에 다 보인다.)
+      #  - 남아 있는 건과 "왜 괜찮은지"는 이슈 #97 에 정리했다. 운영 기준 3건은 모두
+      #    prisma CLI 경유(@prisma/config → deepmerge-ts)이고 실행 이미지에 없다.
+      #    6.x 안에 fix 가 없어 올리지도 내리지도 않았다.
       # 로그의 요약을 보고, 새 critical 이 늘면 별도로 처리한다. 차단으로 바꾸려면
       # continue-on-error 를 지우고 --audit-level=critical 을 붙인다.
       - name: Dependency audit (non-blocking)
