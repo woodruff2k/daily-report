@@ -4,6 +4,19 @@
 
 > 학습용으로 진행 중인 프로젝트다. 아직 배포되지 않았고 일부 기능은 구현 전이다. 현재 상태는 [진행 현황](#진행-현황)을 참고한다.
 
+## 의존성 override
+
+`package.json` 의 `overrides` 는 **전이 의존성의 취약 버전을 올리기 위한 것**이다. `package.json` 에 주석을 달 수 없어 근거를 여기 적는다. (이슈 #97)
+
+| 패키지 | 이유 |
+| :---- | :---- |
+| `baseline-browser-mapping` `^2.11.0` | `next` 가 `2.10.41` 을 끌어온다. `<2.11.0` 에 DoS 권고(GHSA) |
+| `source-map-js` `^1.2.2` | `next` 와 `prisma`(→ `@prisma/config` → `c12` → `magicast`)가 `1.2.1` 을 끌어온다. `<1.2.2` 에 DoS 권고 |
+
+둘 다 **상위 패키지가 올라가면 지워야 한다.** `npm audit` 에서 해당 항목이 사라지면 override 도 뺀다 — 남겨 두면 상위가 요구하는 버전과 어긋날 수 있다.
+
+`npm audit fix` 는 이 저장소에서 내부 오류(`Cannot read properties of null`)로 실패하고, `--force` 는 `prisma` 를 `6.12.0` 으로 **내린다**. 그래서 override 로 지정했다.
+
 ## 기술 스택
 
 | 구분 | 사용 기술 |
