@@ -3,7 +3,11 @@
 import { describe, expect, it } from "vitest";
 import { GET, POST } from "./route";
 import { prisma } from "@/lib/prisma";
-import { createCustomer, createRep } from "@/test/integration/factories";
+import {
+  createCustomer,
+  createRep,
+  createTeam,
+} from "@/test/integration/factories";
 import { call } from "@/test/integration/http";
 
 describe("POST /api/customers (실제 DB)", () => {
@@ -88,7 +92,32 @@ describe("GET /api/customers (실제 DB)", () => {
     expect(result.status).toBe(200);
     expect(result.body.data.totalElements).toBe(1);
     expect(result.body.data.content[0].customerId).toBe(Number(hit.customerId));
+    // 담당 영업 이름과 수정 가능 여부는 JOIN 으로 읽는다. 목의 단위 테스트로는 그 SELECT
+    // 가 열을 빠뜨려도 보이지 않는다(#93 뮤테이션 확인).
+    expect(result.body.data.content[0]).toMatchObject({
+      assignedRepName: rep.name,
+      editable: true,
+      status: "ACTIVE",
+    });
     expect(result.raw).not.toContain(hit.email!);
     expect(result.raw).not.toContain(hit.address!);
+  });
+
+  it("editable 은 담당 영업의 직속 상급자에게만 참이고 관계없는 사원에게는 거짓이다 (#68)", async () => {
+    // 상급자 판정에는 담당 사원의 managerId 가 필요하다. 목록 쿼리가 그 열을 읽지 않으면
+    // 상급자 버튼이 사라진다. 단위 테스트의 목으로는 보이지 않는다(#93 뮤테이션 확인).
+    const { manager, member } = await createTeam();
+    const stranger = await createRep();
+    await createCustomer(member.repId, { customerName: "테스트고객가나" });
+
+    const asManager = await call(GET, "GET", "/api/customers", { as: manager });
+    const asStranger = await call(GET, "GET", "/api/customers", {
+      as: stranger,
+    });
+    const asOwner = await call(GET, "GET", "/api/customers", { as: member });
+
+    expect(asManager.body.data.content[0].editable).toBe(true);
+    expect(asOwner.body.data.content[0].editable).toBe(true);
+    expect(asStranger.body.data.content[0].editable).toBe(false);
   });
 });

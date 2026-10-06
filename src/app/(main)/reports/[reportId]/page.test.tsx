@@ -300,3 +300,66 @@ describe("SCR-220 일일보고 상세·조회 — #14", () => {
     expect(screen.queryByText("작성자: 합성사원")).not.toBeInTheDocument();
   });
 });
+
+// #93: 뮤테이션 확인에서 아래 조건들이 깨져도 기존 테스트가 통과했다.
+describe("SCR-220 — #93 보강", () => {
+  it("작성자 본인이라도 SUBMITTED 보고에는 [수정] 이 없다", async () => {
+    // 기존 SUBMITTED 테스트는 상급자로 로그인해 "작성자 조건" 만으로도 통과했다.
+    // 상태 조건이 빠지면 작성자가 제출한 보고에서 [수정] 이 보이고, 눌러도 편집
+    // 화면이 상세로 되돌려 보낸다.
+    login(AUTHOR);
+    mockApi();
+    render(<ReportDetailPage />);
+
+    await screen.findByText("방문내용100");
+    expect(screen.getByText("상태: 제출")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "수정" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('관련 고객이 null 인 계획 행도 이름 칸에 "-" 를 보인다', async () => {
+    login(MANAGER);
+    mockApi(
+      undefined,
+      detail({
+        plans: [
+          {
+            planId: 301,
+            customer: null,
+            plannedDate: "2026-10-06",
+            content: "내부 계획",
+            sortOrder: 1,
+          },
+        ],
+      }),
+    );
+    render(<ReportDetailPage />);
+    await screen.findByText("내부 계획");
+
+    // 예정일은 값이 있어 "-" 가 나올 수 있는 칸은 관련고객 하나뿐이다.
+    const row = screen.getByText("내부 계획").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).toHaveTextContent("-");
+    expect(cells[1]).toHaveTextContent("2026-10-06");
+  });
+
+  it.each(["abc", "0", "-3", "1.5"])(
+    "reportId 가 %s 이면 서버를 부르지 않고 찾을 수 없다고 보인다",
+    async (bad) => {
+      login(MANAGER);
+      params.reportId = bad;
+      const fetchMock = mockApi();
+      render(<ReportDetailPage />);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "보고를 찾을 수 없습니다.",
+      );
+      expect(
+        fetchMock.mock.calls.filter(([url]) =>
+          String(url).startsWith("/api/reports"),
+        ),
+      ).toEqual([]);
+    },
+  );
+});

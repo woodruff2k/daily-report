@@ -441,3 +441,219 @@ describe("SCR-200 일일보고 목록 — #12", () => {
     expect(screen.queryByText(/\d+ \/ \d+ 페이지/)).not.toBeInTheDocument();
   });
 });
+
+// #93: 뮤테이션 확인에서 아래 분기를 지워도 기존 테스트가 통과했다.
+describe("SCR-200 — #93 보강", () => {
+  it("조회가 실패하면 [다음] 이 없어진 결과 집합을 넘기지 못한다", async () => {
+    // 쪽수 표시는 오류 중에 "-" 로 가려져 totalPages 를 비우는 코드는 문구로는 보이지
+    // 않는다. 보이는 곳은 [다음] 의 활성 여부다. 안 비우면 실패 뒤에도 [다음] 이 눌린다.
+    const user = userEvent.setup();
+    let failNext = false;
+    mockApi(() =>
+      failNext
+        ? fail(
+            400,
+            "INVALID_REQUEST",
+            "fromDate 는 toDate 보다 늦을 수 없습니다.",
+          )
+        : ok(pageData(ROWS, 0, 3, 55)),
+    );
+    render(<ReportListPage />);
+    await screen.findByText("1 / 3 페이지");
+    expect(screen.getByRole("button", { name: "다음" })).toBeEnabled();
+
+    failNext = true;
+    await user.click(screen.getByRole("button", { name: "검색" }));
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "다음" })).toBeDisabled();
+  });
+
+  describe("[+ 오늘 보고 작성] 의 버튼 상태와 찾지 못한 경우", () => {
+    const createButton = () =>
+      screen.getByRole("button", { name: "+ 오늘 보고 작성" });
+
+    it("409 인데 오늘자 보고가 목록에 없으면 찾을 수 없다고 알리고 버튼을 다시 연다", async () => {
+      const user = userEvent.setup();
+      mockApi((url, init) => {
+        if (init?.method === "POST") return fail(409, "REPORT_ALREADY_EXISTS");
+        const params = new URL(url, "http://localhost").searchParams;
+        return params.get("fromDate") === "2026-10-05" &&
+          params.get("toDate") === "2026-10-05"
+          ? ok(pageData([]))
+          : ok(pageData(ROWS));
+      });
+      render(<ReportListPage />);
+      await screen.findByText("2026-09-28");
+
+      await user.click(createButton());
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "오늘자 보고를 찾을 수 없습니다.",
+      );
+      expect(push).not.toHaveBeenCalled();
+      expect(createButton()).toBeEnabled();
+    });
+
+    it("409 뒤 오늘자 조회가 실패하면 그 사유를 알리고 버튼을 다시 연다", async () => {
+      const user = userEvent.setup();
+      mockApi((url, init) => {
+        if (init?.method === "POST") return fail(409, "REPORT_ALREADY_EXISTS");
+        const params = new URL(url, "http://localhost").searchParams;
+        return params.get("fromDate") === "2026-10-05" &&
+          params.get("toDate") === "2026-10-05"
+          ? fail(403, "FORBIDDEN", "조회 사유")
+          : ok(pageData(ROWS));
+      });
+      render(<ReportListPage />);
+      await screen.findByText("2026-09-28");
+
+      await user.click(createButton());
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("조회 사유");
+      expect(push).not.toHaveBeenCalled();
+      expect(createButton()).toBeEnabled();
+    });
+
+    it("그 밖의 오류 뒤에는 버튼이 다시 열린다", async () => {
+      // 안 열면 한 번 실패한 사용자가 새로고침 전까지 보고를 만들 수 없다.
+      const user = userEvent.setup();
+      mockApi((url, init) =>
+        init?.method === "POST"
+          ? fail(400, "INVALID_REQUEST", "형식 오류")
+          : ok(pageData(ROWS)),
+      );
+      render(<ReportListPage />);
+      await screen.findByText("2026-10-05");
+
+      await user.click(createButton());
+      await screen.findByRole("alert");
+
+      expect(createButton()).toBeEnabled();
+    });
+
+    it("201 로 이동을 요청한 뒤에도 버튼이 다시 열린다", async () => {
+      // 이동이 막히거나 취소되면(라우터 목은 이동하지 않는다) 버튼이 영구히 잠긴다.
+      const user = userEvent.setup();
+      mockApi((url, init) =>
+        init?.method === "POST"
+          ? ok({ reportId: 77, status: "DRAFT" }, 201)
+          : ok(pageData(ROWS)),
+      );
+      render(<ReportListPage />);
+      await screen.findByText("2026-10-05");
+
+      await user.click(createButton());
+      await waitFor(() => expect(push).toHaveBeenCalled());
+
+      expect(createButton()).toBeEnabled();
+    });
+  });
+
+  describe("조회 상태 표시", () => {
+    /** 응답을 직접 풀어 줄 때까지 붙잡아 두는 응답. */
+    function deferred() {
+      let release!: (response: Response) => void;
+      const promise = new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+      return { promise: promise as unknown as Response, release };
+    }
+
+    it("첫 조회가 끝나기 전에는 빈 결과 문구 대신 불러오는 중을 보인다", async () => {
+      const first = deferred();
+      mockApi(() => first.promise);
+      render(<ReportListPage />);
+
+      expect(await screen.findByText("불러오는 중…")).toBeInTheDocument();
+      expect(
+        screen.queryByText("조회 결과가 없습니다."),
+      ).not.toBeInTheDocument();
+
+      first.release(ok(pageData(ROWS)));
+      await screen.findByText("2026-10-05");
+    });
+
+    it("조회 결과가 0건이면 조회 결과가 없다고 알린다 (불러오는 중이 남지 않는다)", async () => {
+      mockApi(() => ok(pageData([])));
+      render(<ReportListPage />);
+
+      expect(
+        await screen.findByText("조회 결과가 없습니다."),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("불러오는 중…")).not.toBeInTheDocument();
+    });
+
+    it("조회하는 동안 [검색] 은 눌리지 않고 끝나면 다시 열린다", async () => {
+      const second = deferred();
+      let calls = 0;
+      mockApi(() => {
+        calls += 1;
+        return calls === 1 ? ok(pageData(ROWS)) : second.promise;
+      });
+      const user = userEvent.setup();
+      render(<ReportListPage />);
+      await screen.findByText("2026-10-05");
+
+      await user.click(screen.getByRole("button", { name: "검색" }));
+
+      expect(screen.getByRole("button", { name: "검색 중…" })).toBeDisabled();
+      second.release(ok(pageData(ROWS)));
+      expect(await screen.findByRole("button", { name: "검색" })).toBeEnabled();
+    });
+
+    it("[+ 오늘 보고 작성] 은 생성 요청이 끝나기 전까지 다시 눌리지 않는다 (중복 생성 방지)", async () => {
+      const post = deferred();
+      const fetchMock = mockApi((url, init) =>
+        init?.method === "POST" ? post.promise : ok(pageData(ROWS)),
+      );
+      const user = userEvent.setup();
+      render(<ReportListPage />);
+      await screen.findByText("2026-10-05");
+
+      await user.click(
+        screen.getByRole("button", { name: "+ 오늘 보고 작성" }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "+ 오늘 보고 작성" }),
+      ).toBeDisabled();
+      post.release(ok({ reportId: 77, status: "DRAFT" }, 201));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/reports/77/edit"),
+      );
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+      ).toHaveLength(1);
+    });
+  });
+
+  it.each([
+    ["DRAFT", "/reports/10/edit"],
+    ["SUBMITTED", "/reports/10"],
+  ])(
+    "409 로 오늘자 보고(%s)로 이동을 요청한 뒤에도 버튼이 다시 열린다",
+    async (status, target) => {
+      const user = userEvent.setup();
+      mockApi((url, init) => {
+        if (init?.method === "POST") return fail(409, "REPORT_ALREADY_EXISTS");
+        const params = new URL(url, "http://localhost").searchParams;
+        return params.get("fromDate") === "2026-10-05" &&
+          params.get("toDate") === "2026-10-05"
+          ? ok(pageData([{ ...ROWS[0], status }]))
+          : ok(pageData(ROWS));
+      });
+      render(<ReportListPage />);
+      await screen.findByText("2026-09-28");
+
+      await user.click(
+        screen.getByRole("button", { name: "+ 오늘 보고 작성" }),
+      );
+
+      await waitFor(() => expect(push).toHaveBeenCalledWith(target));
+      expect(
+        screen.getByRole("button", { name: "+ 오늘 보고 작성" }),
+      ).toBeEnabled();
+    },
+  );
+});

@@ -312,3 +312,109 @@ describe("SCR-510 수정 — #17", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+// #93: 뮤테이션 확인에서 제출 중 잠금을 지우거나, 끝난 뒤 풀지 않아도 통과했다.
+describe("SCR-510 제출 중 잠금 — #93", () => {
+  /** 첫 호출(상급자 목록)은 바로 응답하고, 그 뒤 호출은 직접 풀어 줄 때까지 붙잡는다. */
+  function holdWrites() {
+    let release!: (response: Response) => void;
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input) => {
+        if (String(input).startsWith("/api/sales-reps?")) {
+          return Promise.resolve(managerListResponse());
+        }
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      });
+    return { fetchMock, release: (response: Response) => release(response) };
+  }
+
+  const writeCalls = (fetchMock: ReturnType<typeof holdWrites>["fetchMock"]) =>
+    fetchMock.mock.calls.filter(
+      ([input]) => !String(input).startsWith("/api/sales-reps?"),
+    );
+
+  it("등록 요청이 끝나기 전에는 [저장] 이 눌리지 않고, 끝나면 다시 열린다", async () => {
+    const { fetchMock, release } = holdWrites();
+    render(<SalesRepForm />);
+    await screen.findByLabelText("사번");
+    const user = await fillRequired();
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(screen.getByRole("button", { name: "저장 중…" })).toBeDisabled();
+    release(
+      json(201, {
+        success: true,
+        data: { repId: 9, temporaryPassword: "temp-pass-1" },
+        error: null,
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("temp-pass-1");
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
+    expect(writeCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it("등록이 실패하면 [저장] 이 다시 열린다", async () => {
+    mockFetch(
+      json(400, {
+        success: false,
+        data: null,
+        error: { code: "INVALID_REQUEST", message: "형식 오류" },
+      }),
+    );
+    render(<SalesRepForm />);
+    await screen.findByLabelText("사번");
+    const user = await fillRequired();
+
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
+  });
+
+  it("비활성화 요청이 끝나기 전에는 세 버튼이 모두 잠긴다", async () => {
+    const { fetchMock, release } = holdWrites();
+    render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "비활성화" }));
+
+    expect(screen.getByRole("button", { name: "비활성화" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "임시 비밀번호 재발급" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "저장 중…" })).toBeDisabled();
+    release(json(200, { success: true, data: { repId: 2 }, error: null }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/sales-reps"));
+    expect(writeCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it("재발급 요청이 끝나기 전에는 [임시 비밀번호 재발급] 이 다시 눌리지 않고, 끝나면 열린다", async () => {
+    const { fetchMock, release } = holdWrites();
+    render(<SalesRepForm repId={2} initialValues={EDIT_VALUES} />);
+    const user = userEvent.setup();
+
+    await user.click(
+      screen.getByRole("button", { name: "임시 비밀번호 재발급" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "임시 비밀번호 재발급" }),
+    ).toBeDisabled();
+    release(
+      json(200, {
+        success: true,
+        data: { repId: 2, empNo: "S2026002", temporaryPassword: "again-1" },
+        error: null,
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("again-1");
+    expect(
+      screen.getByRole("button", { name: "임시 비밀번호 재발급" }),
+    ).toBeEnabled();
+    expect(writeCalls(fetchMock)).toHaveLength(1);
+  });
+});

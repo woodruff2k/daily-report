@@ -438,3 +438,83 @@ describe("SCR-300 팀 보고 조회 — #15", () => {
     expect(screen.queryByText(/\d+ \/ \d+ 페이지/)).not.toBeInTheDocument();
   });
 });
+
+// #93: totalPages 를 비우는 코드를 지워도 기존 테스트가 통과했다. 쪽수 문구는 오류 중에
+// "-" 로 가려져 값이 보이지 않고, 보이는 곳은 [다음] 의 활성 여부다.
+describe("SCR-300 — #93 보강", () => {
+  it("조회가 실패하면 [다음] 이 없어진 결과 집합을 넘기지 못한다", async () => {
+    const user = userEvent.setup();
+    let failNext = false;
+    mockApi({
+      list: () =>
+        failNext
+          ? fail(
+              400,
+              "INVALID_REQUEST",
+              "fromDate 는 toDate 보다 늦을 수 없습니다.",
+            )
+          : ok(pageData(ROWS, 0, 3, 55)),
+    });
+    render(<TeamReportsPage />);
+    await screen.findByText("1 / 3 페이지");
+    expect(screen.getByRole("button", { name: "다음" })).toBeEnabled();
+
+    failNext = true;
+    await user.click(screen.getByRole("button", { name: "검색" }));
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "다음" })).toBeDisabled();
+  });
+
+  it("이전·다음이 page 를 바꾸고 양 끝에서 비활성이다", async () => {
+    // 이 화면의 쪽 이동은 필터 초기화 테스트에서 [다음] 만 쓰였고 [이전] 은 한 번도
+    // 눌리지 않았다. [이전] 의 비활성 조건을 뒤집어도 통과했다(#93).
+    const user = userEvent.setup();
+    const fetchMock = mockApi({
+      list: (url) =>
+        ok(pageData(ROWS, Number(url.searchParams.get("page")), 3)),
+    });
+    render(<TeamReportsPage />);
+    await screen.findByText("1 / 3 페이지");
+
+    expect(screen.getByRole("button", { name: "이전" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "다음" }));
+    await screen.findByText("2 / 3 페이지");
+    expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "다음" }));
+    await screen.findByText("3 / 3 페이지");
+    expect(screen.getByRole("button", { name: "다음" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "이전" }));
+    await screen.findByText("2 / 3 페이지");
+    expect(listCalls(fetchMock).at(-1)!.searchParams.get("page")).toBe("1");
+  });
+
+  it("조회하는 동안 [검색] 은 눌리지 않고 끝나면 다시 열린다", async () => {
+    let release!: (response: Response) => void;
+    let calls = 0;
+    mockApi({
+      list: () => {
+        calls += 1;
+        if (calls === 1) return ok(pageData(ROWS));
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        }) as unknown as Response;
+      },
+    });
+    const user = userEvent.setup();
+    render(<TeamReportsPage />);
+    await screen.findByText("2026-10-05");
+
+    await user.click(screen.getByRole("button", { name: "검색" }));
+
+    // 비활성만으로는 조회가 돌고 있는지 알 수 없다. 다른 목록 화면(SCR-200·400·500)
+    // 과 같이 문구도 바뀐다 — 팀 화면만 빠져 있었다(#93 검토).
+    const pending = screen.getByRole("button", { name: "검색 중…" });
+    expect(pending).toBeDisabled();
+    release(ok(pageData(ROWS)));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "검색" })).toBeEnabled(),
+    );
+  });
+});

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CustomerPicker } from "./customer-picker";
 import type { CustomerRef } from "@/lib/client/report-form";
@@ -123,5 +123,98 @@ describe("CustomerPicker", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "고객을 검색할 수 없습니다.",
     );
+  });
+
+  it("검색어를 더 입력한 뒤 늦게 도착한 앞 검색의 응답은 최신 결과를 덮지 않는다", async () => {
+    // 응답 순서는 요청 순서를 보장하지 않는다. 앞 검색(합)의 응답이 나중에 와서 뒤 검색
+    // (합성)의 결과를 밀어내면 사용자가 본 결과가 다른 검색어의 것이 된다(#93).
+    const user = userEvent.setup();
+    let releaseFirst!: (response: Response) => void;
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input) => {
+        const keyword = new URL(
+          String(input),
+          "http://localhost",
+        ).searchParams.get("keyword");
+        if (keyword === "합") {
+          return new Promise<Response>((resolve) => {
+            releaseFirst = resolve;
+          });
+        }
+        return Promise.resolve(
+          page([
+            { customerId: 2, customerName: "최신결과", companyName: null },
+          ]),
+        );
+      });
+    render(
+      <CustomerPicker
+        label="고객"
+        value={null}
+        onChange={vi.fn()}
+        toMessage={toMessage}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("고객 검색"), "합");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByLabelText("고객 검색"), "성");
+    await screen.findByRole("button", { name: "최신결과" });
+
+    releaseFirst(
+      page([{ customerId: 1, customerName: "묵은결과", companyName: null }]),
+    );
+    // 늦은 응답이 상태에 닿을 틈을 준다. 상태가 바뀌었다면 그 렌더 뒤에 단언한다.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "최신결과" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "묵은결과" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("검색어를 바꾸면 앞 검색어의 목록을 즉시 치우고 검색 중을 보인다", async () => {
+    // 효과의 cancelled 정리와 **별개의 가드**다. 그쪽은 늦게 온 응답의 setResult 를
+    // 막고, 이것은 **이미 화면에 있는 결과**를 가린다(`result.keyword === trimmed`).
+    // 없으면 "합" 의 목록이 "합성" 을 입력하는 동안 그대로 남아, 사용자가 방금 친
+    // 검색어와 맞지 않는 고객을 고를 수 있다.
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const keyword = new URL(
+        String(input),
+        "http://localhost",
+      ).searchParams.get("keyword");
+      // 두 번째 검색어는 응답을 주지 않는다 — 디바운스·요청 중 상태를 재현한다.
+      if (keyword !== "합") return new Promise<Response>(() => {});
+      return Promise.resolve(
+        page([{ customerId: 1, customerName: "합성상사", companyName: null }]),
+      );
+    });
+    render(
+      <CustomerPicker
+        label="고객"
+        value={null}
+        onChange={vi.fn()}
+        toMessage={toMessage}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("고객 검색"), "합");
+    expect(
+      await screen.findByRole("button", { name: "합성상사" }),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("고객 검색"), "성");
+
+    // 앞 검색어의 결과가 남아 있으면 안 된다.
+    expect(
+      screen.queryByRole("button", { name: "합성상사" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("검색 중…")).toBeInTheDocument();
   });
 });

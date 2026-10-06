@@ -118,6 +118,55 @@ describe("apiFetch — #11", () => {
     expect(caught).toMatchObject({ status: 500, code: "UNKNOWN" });
   });
 
+  it("본문이 있으면 JSON 으로 직렬화하고 content-type 을 붙이며, 없으면 붙이지 않는다", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse(200, { success: true, data: null, error: null }),
+        ),
+      );
+
+    await apiFetch("/api/x", { method: "POST", body: { a: 1 } });
+    await apiFetch("/api/x");
+
+    const [, withBody] = fetchMock.mock.calls[0];
+    expect((withBody?.headers as Record<string, string>)["content-type"]).toBe(
+      "application/json",
+    );
+    expect(withBody?.body).toBe('{"a":1}');
+    const [, withoutBody] = fetchMock.mock.calls[1];
+    expect(
+      (withoutBody?.headers as Record<string, string>)["content-type"],
+    ).toBeUndefined();
+    expect(withoutBody?.body).toBeUndefined();
+  });
+
+  it("HTTP 200 이어도 success 가 false 이면 오류로 던진다", async () => {
+    // 성공 여부는 상태 코드와 success 플래그 둘 다 맞아야 한다. 프록시가 직접 만드는
+    // 응답처럼 한쪽만 어긋난 응답이 성공으로 읽히면 화면이 빈 data 로 렌더된다.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(200, {
+        success: false,
+        data: null,
+        error: { code: "X", message: "실패" },
+      }),
+    );
+
+    await expect(apiFetch("/api/x")).rejects.toMatchObject({
+      status: 200,
+      code: "X",
+    });
+  });
+
+  it("success 가 true 여도 HTTP 상태가 실패이면 오류로 던진다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(500, { success: true, data: { ok: 1 }, error: null }),
+    );
+
+    await expect(apiFetch("/api/x")).rejects.toMatchObject({ status: 500 });
+  });
+
   it("이동은 하지 않는다", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse(401, {

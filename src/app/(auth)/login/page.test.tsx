@@ -184,3 +184,50 @@ describe("SCR-100 로그인 — #11", () => {
     ).toBeUndefined();
   });
 });
+
+// #93: 뮤테이션 확인에서 제출 중 잠금을 지우거나 실패 뒤에도 풀지 않아도 통과했다.
+describe("SCR-100 제출 중 잠금 — #93", () => {
+  it("요청이 끝나기 전에는 [로그인] 이 눌리지 않아 요청이 한 번만 나간다", async () => {
+    let release!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(<LoginPage />);
+
+    await fillAndSubmit("test-user@example.com", "synthetic-password-1");
+
+    expect(screen.getByRole("button", { name: "로그인 중…" })).toBeDisabled();
+    release(
+      jsonResponse(200, {
+        success: true,
+        data: {
+          accessToken: "issued.token",
+          rep: REP,
+          mustChangePassword: false,
+        },
+        error: null,
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("로그인이 실패하면 [로그인] 이 다시 열려 재시도할 수 있다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(401, {
+        success: false,
+        data: null,
+        error: { code: "UNAUTHORIZED", message: "x" },
+      }),
+    );
+    render(<LoginPage />);
+
+    await fillAndSubmit("test-user@example.com", "wrong-password-1");
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "로그인" })).toBeEnabled();
+  });
+});

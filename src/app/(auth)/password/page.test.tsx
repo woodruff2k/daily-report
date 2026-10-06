@@ -155,3 +155,46 @@ describe("SCR-110 비밀번호 변경 — #57", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
 });
+
+// #93: 뮤테이션 확인에서 제출 중 잠금을 지우거나 실패 뒤에도 풀지 않아도 통과했다.
+describe("SCR-110 제출 중 잠금 — #93", () => {
+  it("요청이 끝나기 전에는 [변경] 이 눌리지 않아 요청이 한 번만 나간다", async () => {
+    let release!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(<PasswordChangePage />);
+
+    await fillAndSubmit(CURRENT, NEW, NEW);
+
+    expect(screen.getByRole("button", { name: "변경 중…" })).toBeDisabled();
+    release(
+      jsonResponse(200, {
+        success: true,
+        data: { accessToken: "fresh.token" },
+        error: null,
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/reports"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("변경이 실패하면 [변경] 이 다시 열려 재시도할 수 있다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(400, {
+        success: false,
+        data: null,
+        error: { code: "INVALID_REQUEST", message: "정책 위반" },
+      }),
+    );
+    render(<PasswordChangePage />);
+
+    await fillAndSubmit(CURRENT, NEW, NEW);
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("button", { name: "변경" })).toBeEnabled();
+  });
+});
