@@ -85,7 +85,8 @@ describe("GET /api/sales-reps/team", () => {
 
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        orderBy: { name: "asc" },
+        // 동명이인이 있으면 이름만으로는 순서가 안 정해진다 (#95 검토).
+        orderBy: [{ name: "asc" }, { repId: "asc" }],
         select: { repId: true, name: true, status: true },
       }),
     );

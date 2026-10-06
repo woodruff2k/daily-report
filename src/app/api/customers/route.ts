@@ -21,9 +21,14 @@ export async function GET(request: NextRequest) {
     assertAnyRole(auth, CUSTOMER_ROLES);
 
     const params = request.nextUrl.searchParams;
-    const pageRequest = parsePageRequest(params, CUSTOMER_SORT_FIELDS, {
-      createdAt: "desc",
-    });
+    const pageRequest = parsePageRequest(
+      params,
+      CUSTOMER_SORT_FIELDS,
+      {
+        createdAt: "desc",
+      },
+      "customerId",
+    );
     const where = buildCustomerWhere(params);
 
     const [customers, totalElements] = await Promise.all([
@@ -31,6 +36,9 @@ export async function GET(request: NextRequest) {
         where,
         skip: pageRequest.skip,
         take: pageRequest.take,
+        // 정렬 키가 status·grade·department 처럼 값 종류가 적으면 거의 모든 행이
+        // 동순위라, 보조 키가 없으면 쪽 경계에서 행이 중복·누락된다.
+        // 보조 키(식별자)는 1차 정렬과 무관하게 안정성만 보장하므로 방향은 desc 로 통일한다.
         orderBy: pageRequest.orderBy,
         // 이름은 목록 컬럼이고, repId·managerId 는 `editable` 판정에만 쓴다
         // (응답에는 담지 않는다). 그 밖의 필드는 읽지 않는다. (NFR-04)

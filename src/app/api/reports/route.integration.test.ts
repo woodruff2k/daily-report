@@ -160,3 +160,55 @@ describe("GET /api/reports (실제 DB)", () => {
     ).toEqual([Number(submitted.reportId)]);
   });
 });
+
+// 덮는 TC: 없음(동순위 정렬 안정성은 명세에 TC 가 없다). 가장 가까운 것은 TC-RPT-03. (#95)
+describe("GET /api/reports — 동순위 쪽 경계 (#95, 실제 DB)", () => {
+  it("status 로 정렬하면 전부 동순위여도 모든 쪽을 합쳐 중복·누락이 없고 조회마다 같다", async () => {
+    const rep = await createRep();
+    const created = [];
+    for (let i = 0; i < 40; i++) {
+      const day = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+      created.push(await createReport(rep.repId, { reportDate: day }));
+    }
+
+    // 물리 저장 순서를 식별자 순서에서 떼어 놓는다(UPDATE 는 행을 새 위치에 쓴다).
+    for (const row of [...created].reverse().filter((_, i) => i % 2 === 0)) {
+      await prisma.dailyReport.update({
+        where: { reportId: row.reportId },
+        data: { updatedAt: new Date() },
+      });
+    }
+
+    const fetchAll = async () => {
+      const pages: number[][] = [];
+      let totalElements = -1;
+      for (let page = 0; page < 50; page++) {
+        const result = await call(GET, "GET", "/api/reports", {
+          as: rep,
+          query: { sort: "status,asc", size: "3", page: String(page) },
+        });
+        expect(result.status).toBe(200);
+        totalElements = result.body.data.totalElements;
+        const ids = result.body.data.content.map(
+          (row: { reportId: number }) => row.reportId,
+        );
+        if (ids.length === 0) break;
+        pages.push(ids);
+      }
+      return { pages, totalElements };
+    };
+
+    const first = await fetchAll();
+    const ids = first.pages.flat();
+    const expected = created
+      .map((r) => Number(r.reportId))
+      .sort((a, b) => a - b);
+
+    expect(first.pages.length).toBeGreaterThan(1);
+    expect(ids).toHaveLength(first.totalElements);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort((a, b) => a - b)).toEqual(expected);
+    // 안정성: 같은 조회는 같은 쪽 내용을 돌려준다.
+    expect((await fetchAll()).pages).toEqual(first.pages);
+  });
+});

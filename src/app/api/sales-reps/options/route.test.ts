@@ -72,7 +72,9 @@ describe("GET /api/sales-reps/options", () => {
     await GET(asSalesRep(URL));
 
     expect(prisma.salesRep.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { name: "asc" } }),
+      expect.objectContaining({
+        orderBy: [{ name: "asc" }, { repId: "asc" }],
+      }),
     );
   });
 
