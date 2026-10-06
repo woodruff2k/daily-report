@@ -6,6 +6,20 @@ REPO        := daily-report
 IMAGE       := $(REGISTRY)/$(PROJECT_ID)/$(REPO)/app
 TAG         ?= latest
 
+# Cloud Run 은 linux/amd64 만 실행한다. Apple Silicon 에서 그냥 빌드하면 arm64
+# 이미지가 나오고, push 는 성공하는데 배포가 실패한다.
+#
+# 기본값은 비워 둔다 — 네이티브 빌드가 빨라야 로컬에서 자주 돌린다. 에뮬레이션
+# 빌드는 이 저장소에서 10분을 넘긴다. 대신 두 곳에서 막는다.
+#   - deploy-prod 는 PLATFORM 을 linux/amd64 로 강제한다(타깃 전용 변수는
+#     선행 조건인 build 에도 전파된다).
+#   - push 는 이미지 아키텍처를 보고 amd64 가 아니면 거부한다. make build 와
+#     make push 를 따로 실행해도 잘못된 이미지가 올라가지 않는다.
+PLATFORM    ?=
+# 지연 확장(`=`)이어야 한다. `:=` 로 두면 파싱 시점에 빈 값으로 굳어서
+# deploy-prod 의 타깃 전용 PLATFORM 이 반영되지 않는다(확인했다).
+PLATFORM_FLAG = $(if $(PLATFORM),--platform $(PLATFORM),)
+
 # ── 로컬 개발 ─────────────────────────────────────────────────
 
 .PHONY: dev
@@ -32,7 +46,7 @@ test-coverage:
 
 .PHONY: build
 build:
-	docker build --tag $(IMAGE):$(TAG) .
+	docker build $(PLATFORM_FLAG) --tag $(IMAGE):$(TAG) .
 
 .PHONY: run
 run:
@@ -55,6 +69,14 @@ docker-auth:
 
 .PHONY: push
 push: docker-auth
+	@arch=$$(docker image inspect $(IMAGE):$(TAG) --format '{{.Architecture}}' 2>/dev/null); \
+	 if [ -z "$$arch" ]; then \
+	   echo "✗ $(IMAGE):$(TAG) 이미지가 없다. make build 를 먼저 실행한다."; exit 1; \
+	 elif [ "$$arch" != "amd64" ]; then \
+	   echo "✗ 이미지가 $$arch 다. Cloud Run 은 amd64 만 실행한다."; \
+	   echo "  make build PLATFORM=linux/amd64 로 다시 빌드한다 (또는 make deploy-prod)."; \
+	   exit 1; \
+	 fi
 	docker push $(IMAGE):$(TAG)
 
 # ── Cloud Run ─────────────────────────────────────────────────
@@ -75,6 +97,7 @@ deploy:
 	  --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest"
 
 .PHONY: deploy-prod
+deploy-prod: PLATFORM := linux/amd64
 deploy-prod: build push deploy
 	@echo "✓ 배포 완료"
 
