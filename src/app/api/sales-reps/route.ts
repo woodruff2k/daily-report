@@ -10,6 +10,7 @@ import {
   assertManagerAssignable,
   toSalesRepListItem,
   toSalesRepResponse,
+  type CreatedSalesRepResponse,
 } from "@/lib/sales-rep";
 import {
   SALES_REP_SORT_FIELDS,
@@ -102,14 +103,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return apiSuccess(
-      {
-        ...toSalesRepResponse(created),
-        // 평문은 저장하지 않는다. 이 응답이 유일한 전달 경로다. (NFR-04)
-        ...(temporaryPassword === null ? {} : { temporaryPassword }),
-      },
-      201,
-    );
+    const response: CreatedSalesRepResponse = {
+      ...toSalesRepResponse(created),
+      // 평문은 저장하지 않는다. 이 응답이 유일한 전달 경로다. (NFR-04)
+      ...(temporaryPassword === null ? {} : { temporaryPassword }),
+    };
+    return apiSuccess(response, 201);
   } catch (error) {
     return apiErrorResponse(mapSalesRepWriteError(error));
   }

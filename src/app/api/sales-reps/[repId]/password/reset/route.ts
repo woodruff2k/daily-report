@@ -5,6 +5,7 @@ import { toJsonId } from "@/lib/identifier";
 import { generateTemporaryPassword, hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { mapSalesRepWriteError } from "@/lib/prisma-errors";
+import type { ResetPasswordResponse } from "@/lib/sales-rep";
 import { parseRepIdParam } from "@/lib/sales-rep-query";
 
 interface RouteContext {
@@ -40,11 +41,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       select: { repId: true, empNo: true },
     });
 
-    return apiSuccess({
+    const response: ResetPasswordResponse = {
       repId: toJsonId(updated.repId),
       empNo: updated.empNo,
       temporaryPassword,
-    });
+    };
+    return apiSuccess(response);
   } catch (error) {
     return apiErrorResponse(mapSalesRepWriteError(error));
   }
