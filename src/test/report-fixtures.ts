@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import type { ReportDetailRecord } from "@/lib/report";
 
 /**
@@ -120,47 +121,27 @@ function request(
 }
 
 export function asSalesRep(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "1", "x-user-role": "SALES_REP" },
-    options,
-  );
+  return request(url, bearerHeaders(1, "SALES_REP"), options);
 }
 
 /** 1번 사원의 직속 상급자. */
 export function asManager(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "2", "x-user-role": "MANAGER" },
-    options,
-  );
+  return request(url, bearerHeaders(2, "MANAGER"), options);
 }
 
 /** 1번 사원과 무관한 영업사원. */
 export function asOtherRep(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "3", "x-user-role": "SALES_REP" },
-    options,
-  );
+  return request(url, bearerHeaders(3, "SALES_REP"), options);
 }
 
 /** 1번 사원의 상급자가 아닌 다른 상급자. */
 export function asOtherManager(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "4", "x-user-role": "MANAGER" },
-    options,
-  );
+  return request(url, bearerHeaders(4, "MANAGER"), options);
 }
 
 /** 보고는 관리자 담당이 아니다. 403이어야 한다. */
 export function asAdmin(url: string, options?: RequestOptions) {
-  return request(
-    url,
-    { "x-user-rep-id": "9", "x-user-role": "ADMIN" },
-    options,
-  );
+  return request(url, bearerHeaders(9, "ADMIN"), options);
 }
 
 export function withoutAuth(url: string, options?: RequestOptions) {

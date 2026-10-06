@@ -22,6 +22,19 @@ function unauthorized(message: string) {
   );
 }
 
+/**
+ * API 의 1차 관문. 조기 401, 서버측 무효화 검증, 임시 비밀번호 게이트를 맡는다.
+ *
+ * 사용자 정보를 헤더로 넘기지 않는다. 라우트의 `parseAuthContext` 가
+ * `Authorization` 의 토큰 서명을 직접 검증한다. 클라이언트가 설정할 수 있는
+ * 헤더를 신뢰 경계로 쓰면 프록시 우회 시 임의 사용자 위장이 되기 때문이다.
+ * (이슈 #102)
+ *
+ * 무효화 검증(`tokenVersion`·`status`, DB 조회 1회)은 **여기에만** 둔다.
+ * 라우트까지 같은 조회를 하면 요청당 2회가 된다. 프록시가 우회되면 무효화된
+ * 토큰이 통과하지만, 그것도 유효하게 서명된 토큰을 가진 사람에 한한다.
+ * 이 트레이드오프의 근거는 `src/lib/auth.ts` 의 `parseAuthContext` 주석에 있다.
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -88,11 +101,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-user-rep-id", payload.repId);
-  requestHeaders.set("x-user-role", payload.role);
-
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  return NextResponse.next();
 }
 
 export const config = {

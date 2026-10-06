@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { TEST_JWT_SECRET } from "./src/test/integration/test-database";
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
@@ -8,6 +9,11 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // parseAuthContext 가 토큰 서명을 검증하므로(이슈 #102) 단위 테스트에도 서명 키가
+    // 필요하다. 통합 설정(vitest.integration.config.ts)과 같은 상수를 쓴다 — 비밀이
+    // 두 곳에 있으면 어느 쪽이 맞는지 헷갈린다. setup.ts 가 아니라 설정에 두는 이유:
+    // 워커가 뜰 때 환경에 들어가 import 순서와 무관하고, 통합 설정과 나란히 보인다.
+    env: { JWT_SECRET: TEST_JWT_SECRET },
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     // 통합 테스트는 실제 DB 가 필요해 npm run test:integration 으로 분리한다.
     exclude: [...configDefaults.exclude, "src/**/*.integration.test.ts"],

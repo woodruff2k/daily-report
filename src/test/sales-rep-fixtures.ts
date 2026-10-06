@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import type { SalesRep } from "@prisma/client";
 
 /** 합성 데이터. 실제 직원 정보를 쓰지 않는다. (테스트 명세 1.4) */
@@ -33,8 +34,8 @@ export const MANAGER_REP: SalesRep = {
   role: "MANAGER",
 };
 
-const ADMIN_HEADERS = { "x-user-rep-id": "9", "x-user-role": "ADMIN" };
-const SALES_REP_HEADERS = { "x-user-rep-id": "1", "x-user-role": "SALES_REP" };
+const ADMIN_HEADERS = bearerHeaders(9, "ADMIN");
+const SALES_REP_HEADERS = bearerHeaders(1, "SALES_REP");
 
 interface RequestOptions {
   method?: string;

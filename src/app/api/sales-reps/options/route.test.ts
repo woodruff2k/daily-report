@@ -1,6 +1,7 @@
 // 영업 Select 옵션(API 명세 6.6). 덮는 항목: 역할 무관 200, 401, ACTIVE 만, name asc,
 // 최소 필드(NFR-04, TC-SEC-06 계열). 6.1 의 ADMIN 전용은 route.test.ts 가 지킨다.
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MANAGER_REP,
@@ -22,7 +23,7 @@ const URL = "http://localhost/api/sales-reps/options";
 
 function asManager() {
   return new NextRequest(URL, {
-    headers: { "x-user-rep-id": "2", "x-user-role": "MANAGER" },
+    headers: bearerHeaders(2, "MANAGER"),
   });
 }
 

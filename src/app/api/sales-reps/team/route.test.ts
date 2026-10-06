@@ -6,6 +6,7 @@
 // 범위 판정(직속 팀원)이 **TC-SEC-02**(팀 범위 밖 조회 차단, NFR-01/3.6)와
 // 같은 규칙이므로 그것을 참조로 적는다. 명세서에 절이 생기면 번호를 붙인다.
 import { NextRequest } from "next/server";
+import { bearerHeaders } from "@/test/auth-headers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   REP,
@@ -26,7 +27,7 @@ const URL = "http://localhost/api/sales-reps/team";
 
 function asManager() {
   return new NextRequest(URL, {
-    headers: { "x-user-rep-id": "2", "x-user-role": "MANAGER" },
+    headers: bearerHeaders(2, "MANAGER"),
   });
 }
 
@@ -104,7 +105,7 @@ describe("GET /api/sales-reps/team", () => {
   it("페이지네이션 파라미터를 받지 않는다", async () => {
     await GET(
       new NextRequest(`${URL}?page=3&size=1`, {
-        headers: { "x-user-rep-id": "2", "x-user-role": "MANAGER" },
+        headers: bearerHeaders(2, "MANAGER"),
       }),
     );
 

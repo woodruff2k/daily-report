@@ -13,7 +13,9 @@ vi.mock("@/lib/password", () => ({
   verifyPassword: vi.fn(),
 }));
 
-vi.mock("@/lib/jwt", () => ({
+// 서명 검증(verifyAccessToken)은 실제 구현을 쓴다. 발급만 목으로 바꾼다.
+vi.mock("@/lib/jwt", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jwt")>()),
   signAccessToken: vi.fn(() => "fresh.access.token"),
 }));
 
@@ -34,9 +36,22 @@ function request(body: unknown, headers: Record<string, string> = {}) {
   });
 }
 
-/** 프록시가 토큰을 검증한 뒤의 요청. */
+/**
+ * 서명된 토큰을 단 요청. 이 파일은 `signAccessToken` 을 목으로 바꾸므로(새 토큰
+ * 발급 단언용) 요청용 토큰은 실제 구현으로 서명한다.
+ */
+const { signAccessToken: signActual } =
+  await vi.importActual<typeof import("@/lib/jwt")>("@/lib/jwt");
+
 function asSelf(body: unknown) {
-  return request(body, { "x-user-rep-id": "1", "x-user-role": "SALES_REP" });
+  const token = signActual({
+    repId: "1",
+    name: "홍길동",
+    role: "SALES_REP",
+    mustChangePassword: false,
+    tokenVersion: 0,
+  });
+  return request(body, { authorization: `Bearer ${token}` });
 }
 
 beforeEach(() => {

@@ -105,19 +105,26 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
 });
 
 describe("proxy — 유효 토큰", () => {
-  it("검증한 사용자 정보를 요청 헤더에 심는다", async () => {
+  it("사용자 정보를 요청 헤더에 심지 않는다 (#102)", async () => {
     const response = await proxy(bearer("/api/reports"));
 
-    // parseAuthContext 가 읽는 두 헤더다. 이름이 바뀌면 인가 전체가 401 로 막힌다.
-    expect(response.headers.get("x-middleware-override-headers")).toContain(
-      "x-user-rep-id",
+    // 라우트가 토큰 서명을 직접 검증한다. 헤더를 신뢰 경계로 쓰지 않는다.
+    expect(response.headers.get("x-middleware-override-headers")).toBeNull();
+    expect(
+      response.headers.get("x-middleware-request-x-user-rep-id"),
+    ).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-user-role")).toBeNull();
+  });
+
+  it("위조 헤더만 보내고 토큰이 없으면 401 이다 (#102)", async () => {
+    const response = await proxy(
+      request("/api/reports", {
+        "x-user-rep-id": "1",
+        "x-user-role": "ADMIN",
+      }),
     );
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
-      "1",
-    );
-    expect(response.headers.get("x-middleware-request-x-user-role")).toBe(
-      "SALES_REP",
-    );
+
+    expect(response.status).toBe(401);
   });
 
   it("토큰 문자열만 떼어 검증에 넘긴다", async () => {
@@ -184,14 +191,6 @@ describe("proxy — 임시 비밀번호 상태 차단 (#44)", () => {
 
   it("로그아웃은 통과시킨다", async () => {
     expect((await proxy(bearer("/api/auth/logout"))).status).toBe(200);
-  });
-
-  it("통과하는 경로에는 인증 헤더를 그대로 심는다", async () => {
-    const response = await proxy(bearer("/api/me/password"));
-
-    expect(response.headers.get("x-middleware-request-x-user-rep-id")).toBe(
-      "1",
-    );
   });
 
   it("플래그가 내려가면 다시 통과한다", async () => {
