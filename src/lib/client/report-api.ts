@@ -81,7 +81,7 @@ export function createReport(reportDate: string) {
 export type VisitType = "VISIT" | "CALL" | "ONLINE";
 export type ProblemStatus = "OPEN" | "CLOSED";
 
-/** 상세 응답(API 명세 3.3). 과제·계획에는 고객 이름이 없고 식별자만 있다. */
+/** 상세 응답(API 명세 3.3). 과제·계획의 관련 고객은 이름까지 오고, 없으면 null 이다. */
 export interface ReportDetail {
   reportId: number;
   rep: { repId: number; name: string };
@@ -99,14 +99,14 @@ export interface ReportDetail {
   }[];
   problems: {
     problemId: number;
-    customerId: number | null;
+    customer: { customerId: number; customerName: string } | null;
     content: string;
     status: ProblemStatus;
     sortOrder: number;
   }[];
   plans: {
     planId: number;
-    customerId: number | null;
+    customer: { customerId: number; customerName: string } | null;
     plannedDate: string | null;
     content: string;
     sortOrder: number;

@@ -220,14 +220,21 @@
         "result": "견적요청", "sortOrder": 1 }
     ],
     "problems": [
-      { "problemId": 200, "customerId": 5, "content": "납기 단축 요청", "status": "OPEN", "sortOrder": 1 }
+      { "problemId": 200, "customer": { "customerId": 5, "customerName": "(주)A상사" },
+        "content": "납기 단축 요청", "status": "OPEN", "sortOrder": 1 }
     ],
     "plans": [
-      { "planId": 300, "customerId": 5, "plannedDate": "2026-06-21", "content": "견적서 발송", "sortOrder": 1 }
+      { "planId": 300, "customer": null, "plannedDate": "2026-06-21",
+        "content": "견적서 발송", "sortOrder": 1 }
     ]
   }
 }
 ```
+
+- **`problems[]`·`plans[]` 는 `customerId` 가 아니라 `customer` 객체를 담는다.** 방문기록과 같은 `{ customerId, customerName }` 이다. 화면이 이름을 알려고 `GET /api/customers/{id}` 를 반복 호출하면 이메일·주소가 따라오므로(NFR-04) 이름만 상세에 담는다. 연락처·이메일·주소는 담지 않는다.
+- **관련 고객은 선택이라 `customer` 가 `null` 일 수 있다.** 방문기록의 `customer` 는 필수라 `null` 이 없다.
+- 비활성 고객도 이름이 담긴다(NFR-03).
+- **이 변경은 응답에만 해당한다.** 저장 요청(3.4)의 과제·계획은 계속 `customerId`(숫자 또는 `null`)를 받는다. 3.4 응답은 이 상세와 같은 모양이다.
 
 ### 3.4 일일보고 저장 (방문/과제/계획 일괄)
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { getCustomer } from "@/lib/client/customer-api";
 import {
   getReport,
   reportErrorMessage,
@@ -27,7 +26,6 @@ import {
   emptyProblem,
   emptyVisit,
   toRows,
-  withCustomerName,
   toSaveBody,
   validateForSave,
   validateForSubmit,
@@ -40,7 +38,6 @@ import {
 import { useApiErrors } from "@/lib/client/use-api-errors";
 import { getStoredRep } from "@/lib/client/auth-storage";
 import { customerErrorMessage } from "@/lib/client/customer-api";
-import { isUnauthorized } from "@/lib/client/api-client";
 import { CustomerPicker } from "@/components/customer-picker";
 
 const NATIVE_SELECT =
@@ -82,61 +79,6 @@ export default function ReportEditPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // 고객 id → 이름. 과제·계획 응답에는 이름이 없어 직접 채운다.
-  const names = useRef(new Map<number, string>());
-
-  /** 방문 응답에 이미 들어 있는 이름. 추가 조회가 아니다. */
-  function cacheVisitNames(detail: ReportDetail) {
-    for (const visit of detail.visits) {
-      names.current.set(visit.customer.customerId, visit.customer.customerName);
-    }
-  }
-
-  /** 아직 이름을 모르는 고객 식별자. 과제·계획 응답에는 이름이 없다(명세 3.3). */
-  function missingNameIds(detail: ReportDetail): number[] {
-    const missing = new Set<number>();
-    for (const row of [...detail.problems, ...detail.plans]) {
-      if (row.customerId !== null && !names.current.has(row.customerId)) {
-        missing.add(row.customerId);
-      }
-    }
-    return [...missing];
-  }
-
-  /**
-   * 과제·계획의 고객 이름을 **뒤에서** 채운다. 폼을 막지 않는다.
-   *
-   * 이름은 표시용인데 행마다 요청이 하나씩 늘어난다(최대 200). 전부 끝나기를
-   * 기다리면 하나가 늦는 것만으로 이미 받은 방문 기록·머리글까지 못 보고
-   * "불러오는 중…" 에 머문다. 받는 대로 그 칸만 채운다.
-   */
-  const resolveNames = useCallback(
-    async (ids: number[], isCancelled: () => boolean) => {
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const found = await getCustomer(id);
-            names.current.set(id, found.customerName);
-            if (isCancelled()) return;
-            setRows((prev) =>
-              prev === null
-                ? prev
-                : withCustomerName(prev, id, found.customerName),
-            );
-          } catch (caught) {
-            // 이름을 못 받는 것은 그 칸만 식별자로 두면 된다. 그러나 401 은 세션이
-            // 끊긴 것이라 삼키면 안 된다 — 삼키면 "고객 #6" 이 뜬 폼을 쓰다가
-            // 임시저장에서야 끊긴 것을 알게 된다. `customer` 가 로그인으로 보낸다.
-            if (isUnauthorized(caught)) {
-              customer(caught, "");
-            }
-          }
-        }),
-      );
-    },
-    [customer],
-  );
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -160,15 +102,12 @@ export default function ReportEditPage() {
           router.replace(`/reports/${reportId}`);
           return;
         }
-        cacheVisitNames(detail);
         setHeader({
           reportDate: detail.reportDate,
           repName: detail.rep.name,
           status: detail.status,
         });
-        setRows(toRows(detail, names.current));
-        // 폼을 먼저 그리고 이름은 뒤에서 채운다. await 하지 않는다.
-        void resolveNames(missingNameIds(detail), () => cancelled);
+        setRows(toRows(detail));
       } catch (caught) {
         if (cancelled) return;
         setErrors([report(caught, "보고를 불러올 수 없습니다.")]);
@@ -177,16 +116,14 @@ export default function ReportEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [reportId, report, router, resolveNames]);
+  }, [reportId, report, router]);
 
   /**
    * 서버 응답으로 폼을 갱신한다. 새 행의 식별자가 여기서 들어온다.
    * 식별자가 같은 행은 key 를 물려받아 행이 다시 붙지 않는다(입력 중인 검색어 보존).
    */
   function applyDetail(detail: ReportDetail) {
-    cacheVisitNames(detail);
-    setRows((prev) => toRows(detail, names.current, prev ?? undefined));
-    void resolveNames(missingNameIds(detail), () => false);
+    setRows((prev) => toRows(detail, prev ?? undefined));
   }
 
   /**
@@ -236,9 +173,6 @@ export default function ReportEditPage() {
     key: string,
     customer: CustomerRef | null,
   ) {
-    if (customer?.customerName) {
-      names.current.set(customer.customerId, customer.customerName);
-    }
     update(section, key, { customer });
   }
 

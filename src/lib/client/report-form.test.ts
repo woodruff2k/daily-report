@@ -89,21 +89,21 @@ describe("toRows — 과제·계획 순서 (#85)", () => {
     problems: [
       {
         problemId: 1,
-        customerId: null,
+        customer: null,
         content: "a",
         status: "OPEN",
         sortOrder: 1,
       },
       {
         problemId: 2,
-        customerId: null,
+        customer: null,
         content: "b",
         status: "OPEN",
         sortOrder: 2,
       },
       {
         problemId: 3,
-        customerId: null,
+        customer: null,
         content: "c",
         status: "OPEN",
         sortOrder: 2,
@@ -112,14 +112,14 @@ describe("toRows — 과제·계획 순서 (#85)", () => {
     plans: [
       {
         planId: 1,
-        customerId: null,
+        customer: null,
         plannedDate: null,
         content: "x",
         sortOrder: 1,
       },
       {
         planId: 2,
-        customerId: null,
+        customer: null,
         plannedDate: null,
         content: "y",
         sortOrder: 2,
@@ -128,7 +128,7 @@ describe("toRows — 과제·계획 순서 (#85)", () => {
   };
 
   it("서버가 준 순서를 유지한다 (sortOrder 가 같으면 서버 순서)", () => {
-    const rows = toRows(detail, new Map());
+    const rows = toRows(detail);
     expect(rows.problems.map((p) => p.content)).toEqual(["a", "b", "c"]);
     expect(rows.plans.map((p) => p.content)).toEqual(["x", "y"]);
   });
@@ -140,7 +140,7 @@ describe("toRows — 과제·계획 순서 (#85)", () => {
       problems: [detail.problems[1], detail.problems[0]],
       plans: [...detail.plans].reverse(),
     };
-    const rows = toRows(shuffled, new Map());
+    const rows = toRows(shuffled);
     expect(rows.problems.map((p) => p.content)).toEqual(["a", "b"]);
     expect(rows.plans.map((p) => p.content)).toEqual(["x", "y"]);
   });

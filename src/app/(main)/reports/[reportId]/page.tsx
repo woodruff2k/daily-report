@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,8 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { isUnauthorized } from "@/lib/client/api-client";
-import { customerErrorMessage, getCustomer } from "@/lib/client/customer-api";
 import {
   getReport,
   reportErrorMessage,
@@ -46,8 +44,6 @@ const PROBLEM_STATUS_LABEL: Record<string, string> = {
 export default function ReportDetailPage() {
   const router = useRouter();
   const report = useApiErrors(reportErrorMessage);
-  // 이름 조회는 고객 API 다. 보고 문장을 쓰면 틀린 안내가 나간다(#13 검토).
-  const customer = useApiErrors(customerErrorMessage);
   const params = useParams<{ reportId: string }>();
   const reportId = Number(params.reportId);
 
@@ -65,38 +61,6 @@ export default function ReportDetailPage() {
   } | null>(null);
   const detail = loaded?.reportId === reportId ? loaded.data : null;
   const [error, setError] = useState<string | null>(null);
-  // 고객 id → 이름. 과제·계획 응답에는 이름이 없어 직접 채운다.
-  const [nameCache, setNameCache] = useState<{
-    reportId: number;
-    byId: Record<number, string>;
-  } | null>(null);
-  const names = nameCache?.reportId === reportId ? nameCache.byId : {};
-
-  /** 과제·계획의 고객 이름을 뒤에서 채운다. 화면을 막지 않고 받는 대로 그 칸만 바꾼다. */
-  const resolveNames = useCallback(
-    async (ids: number[], isCancelled: () => boolean) => {
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const found = await getCustomer(id);
-            if (isCancelled()) return;
-            setNameCache((prev) =>
-              prev === null
-                ? prev
-                : { ...prev, byId: { ...prev.byId, [id]: found.customerName } },
-            );
-          } catch (caught) {
-            // 실패하면 그 칸만 `고객 #id` 로 둔다. 401 은 세션이 끊긴 것이라 삼키지 않는다.
-            if (isUnauthorized(caught)) {
-              customer(caught, "");
-            }
-          }
-        }),
-      );
-    },
-    [customer],
-  );
-
   // 내 repId. 하이드레이션 때문에 마운트 뒤에 읽는다.
   const [myRepId, setMyRepId] = useState<number | null>(null);
   useEffect(() => {
@@ -118,19 +82,6 @@ export default function ReportDetailPage() {
         if (cancelled) return;
         setError(null);
         setLoaded({ reportId, data });
-        const known: Record<number, string> = {};
-        for (const visit of data.visits) {
-          known[visit.customer.customerId] = visit.customer.customerName;
-        }
-        setNameCache({ reportId, byId: known });
-        const missing = new Set<number>();
-        for (const row of [...data.problems, ...data.plans]) {
-          if (row.customerId !== null && !(row.customerId in known)) {
-            missing.add(row.customerId);
-          }
-        }
-        // 먼저 그리고 이름은 뒤에서 채운다. await 하지 않는다.
-        void resolveNames([...missing], () => cancelled);
       } catch (caught) {
         if (cancelled) return;
         // 조회 실패 시 묵은 데이터를 오류 옆에 남기지 않는다.
@@ -141,7 +92,7 @@ export default function ReportDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [reportId, report, resolveNames]);
+  }, [reportId, report]);
 
   if (detail === null) {
     return (
@@ -157,9 +108,6 @@ export default function ReportDetailPage() {
       </section>
     );
   }
-
-  const nameOf = (id: number | null) =>
-    id === null ? "-" : (names[id] ?? `고객 #${id}`);
 
   return (
     <section>
@@ -252,7 +200,7 @@ export default function ReportDetailPage() {
             ) : (
               detail.problems.map((problem) => (
                 <TableRow key={problem.problemId}>
-                  <TableCell>{nameOf(problem.customerId)}</TableCell>
+                  <TableCell>{problem.customer?.customerName ?? "-"}</TableCell>
                   <TableCell className="whitespace-pre-wrap">
                     {problem.content}
                   </TableCell>
@@ -282,7 +230,7 @@ export default function ReportDetailPage() {
             ) : (
               detail.plans.map((plan) => (
                 <TableRow key={plan.planId}>
-                  <TableCell>{nameOf(plan.customerId)}</TableCell>
+                  <TableCell>{plan.customer?.customerName ?? "-"}</TableCell>
                   <TableCell>{plan.plannedDate ?? "-"}</TableCell>
                   <TableCell className="whitespace-pre-wrap">
                     {plan.content}

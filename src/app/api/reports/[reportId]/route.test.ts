@@ -112,8 +112,14 @@ describe("GET /api/reports/{reportId} — TC-RPT-05, TC-SEC-01", () => {
           sortOrder: 1,
         },
       ],
-      problems: [{ problemId: 200, customerId: 5, status: "OPEN" }],
-      plans: [{ planId: 300, customerId: null, plannedDate: "2026-06-21" }],
+      problems: [
+        {
+          problemId: 200,
+          customer: { customerId: 5, customerName: "테스트고객" },
+          status: "OPEN",
+        },
+      ],
+      plans: [{ planId: 300, customer: null, plannedDate: "2026-06-21" }],
     });
   });
 
