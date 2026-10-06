@@ -27,9 +27,14 @@ export async function GET(request: NextRequest) {
     assertRole(parseAuthContext(request.headers), "ADMIN");
 
     const params = request.nextUrl.searchParams;
-    const pageRequest = parsePageRequest(params, SALES_REP_SORT_FIELDS, {
-      createdAt: "desc",
-    });
+    const pageRequest = parsePageRequest(
+      params,
+      SALES_REP_SORT_FIELDS,
+      {
+        createdAt: "desc",
+      },
+      "repId",
+    );
     const where = buildSalesRepWhere(params);
 
     const [reps, totalElements] = await Promise.all([
@@ -37,6 +42,9 @@ export async function GET(request: NextRequest) {
         where,
         skip: pageRequest.skip,
         take: pageRequest.take,
+        // 정렬 키가 status·grade·department 처럼 값 종류가 적으면 거의 모든 행이
+        // 동순위라, 보조 키가 없으면 쪽 경계에서 행이 중복·누락된다.
+        // 보조 키(식별자)는 1차 정렬과 무관하게 안정성만 보장하므로 방향은 desc 로 통일한다.
         orderBy: pageRequest.orderBy,
         // 목록 컬럼이 상급자 이름이다. 식별자만 주면 화면이 다시 조회해야 한다.
         include: { manager: { select: { name: true } } },

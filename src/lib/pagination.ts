@@ -11,7 +11,19 @@ export interface PageRequest {
   /** Prisma skip/take */
   skip: number;
   take: number;
-  orderBy: Record<string, SortDirection>;
+  /**
+   * Prisma `orderBy`. **항상 2원소다** — 요청한 정렬 뒤에 식별자 보조 키가 붙는다.
+   *
+   * SQL 은 동순위 행 사이의 순서를 보장하지 않는다. `skip`/`take` 로 쪽을 자르면
+   * 같은 행이 두 쪽에 나오거나 어떤 행이 어느 쪽에도 안 나온다. 정렬 가능 필드에
+   * `status`(두 가지)·`grade`(세 가지)·`department` 처럼 값 종류가 적은 것이 있어
+   * **그 필드로 정렬하면 거의 모든 행이 동순위**이고, 흔들림이 기본 동작이 된다.
+   *
+   * 보조 키를 호출부가 아니라 **여기서 붙인다.** 호출부에 맡겼더니 네 라우트 중
+   * 셋이 빠뜨린 채로 배포됐다(이슈 #95). 새 목록 라우트가 같은 실수를 반복할 수
+   * 없게 구조로 보장한다.
+   */
+  orderBy: [Record<string, SortDirection>, Record<string, SortDirection>];
 }
 
 /** 목록 조회 응답 본문. (API 명세 1.3) */
@@ -57,7 +69,22 @@ export function parsePageRequest(
   params: URLSearchParams,
   allowedSortFields: readonly string[],
   defaultSort: Record<string, SortDirection>,
+  /**
+   * 동순위 보조 키로 쓸 식별자 필드(기본키). `orderBy` 의 두 번째 원소가 된다.
+   * 방향은 `desc` 로 고정한다 — 1차 정렬과 무관하게 **안정성만** 보장하면 되고,
+   * 네 라우트의 기본 정렬이 모두 최신순이라 그쪽과도 어울린다.
+   */
+  idField: string,
 ): PageRequest {
+  // 정렬 가능 필드에 식별자가 있으면 `[{id:"asc"},{id:"desc"}]` 처럼 같은 컬럼이
+  // 두 번 들어가 뒤의 것이 무시된다. 지금은 어느 목록도 식별자를 정렬 대상으로
+  // 두지 않지만, 넣으면 보조 키가 조용히 죽으므로 여기서 막는다.
+  if (allowedSortFields.includes(idField)) {
+    throw new Error(
+      `정렬 가능 필드에 보조 키(${idField})를 넣을 수 없다. 보조 키가 무시된다.`,
+    );
+  }
+
   const page = parseNonNegativeInt(params.get("page"), 0, "page");
   const size = parseNonNegativeInt(params.get("size"), DEFAULT_SIZE, "size");
 
@@ -70,7 +97,10 @@ export function parsePageRequest(
     size,
     skip: page * size,
     take: size,
-    orderBy: parseSort(params.get("sort"), allowedSortFields, defaultSort),
+    orderBy: [
+      parseSort(params.get("sort"), allowedSortFields, defaultSort),
+      { [idField]: "desc" },
+    ],
   };
 }
 

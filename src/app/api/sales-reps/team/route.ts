@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
 
     const reps = await prisma.salesRep.findMany({
       where: { managerId: auth.repId },
-      orderBy: { name: "asc" },
+      // 동명이인이 있으면 이름만으로는 순서가 정해지지 않아 새로고침마다 Select
+      // 항목이 뒤바뀐다. 페이지네이션이 없어 누락·중복은 없지만 흔들림은 보인다.
+      // (이슈 #95 검토)
+      orderBy: [{ name: "asc" }, { repId: "asc" }],
       select: { repId: true, name: true, status: true },
     });
 

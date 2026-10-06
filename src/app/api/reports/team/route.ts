@@ -35,9 +35,14 @@ export async function GET(request: NextRequest) {
     assertAnyRole(auth, ["MANAGER"]);
 
     const params = request.nextUrl.searchParams;
-    const pageRequest = parsePageRequest(params, REPORT_SORT_FIELDS, {
-      reportDate: "desc",
-    });
+    const pageRequest = parsePageRequest(
+      params,
+      REPORT_SORT_FIELDS,
+      {
+        reportDate: "desc",
+      },
+      "reportId",
+    );
     const requestedRepIds = parseRepIdsParam(params);
 
     const subordinates = await prisma.salesRep.findMany({
@@ -64,7 +69,7 @@ export async function GET(request: NextRequest) {
         skip: pageRequest.skip,
         take: pageRequest.take,
         // 같은 일자에 여러 팀원의 보고가 있어 정렬 키만으로는 페이지 경계가 흔들린다.
-        orderBy: [pageRequest.orderBy, { reportId: "desc" }],
+        orderBy: pageRequest.orderBy,
         select: {
           reportId: true,
           reportDate: true,

@@ -17,9 +17,14 @@ export async function GET(request: NextRequest) {
     assertAnyRole(auth, REPORT_ROLES);
 
     const params = request.nextUrl.searchParams;
-    const pageRequest = parsePageRequest(params, REPORT_SORT_FIELDS, {
-      reportDate: "desc",
-    });
+    const pageRequest = parsePageRequest(
+      params,
+      REPORT_SORT_FIELDS,
+      {
+        reportDate: "desc",
+      },
+      "reportId",
+    );
     // 조회 대상은 항상 호출자 본인이다. 사원 식별자를 쿼리로 받지 않는다.
     const where = buildReportWhere(params, auth.repId);
 
@@ -28,6 +33,9 @@ export async function GET(request: NextRequest) {
         where,
         skip: pageRequest.skip,
         take: pageRequest.take,
+        // 정렬 키가 status·grade·department 처럼 값 종류가 적으면 거의 모든 행이
+        // 동순위라, 보조 키가 없으면 쪽 경계에서 행이 중복·누락된다.
+        // 보조 키(식별자)는 1차 정렬과 무관하게 안정성만 보장하므로 방향은 desc 로 통일한다.
         orderBy: pageRequest.orderBy,
         // 건수는 _count 로 한 번에 읽는다. 보고마다 따로 세지 않는다.
         select: {

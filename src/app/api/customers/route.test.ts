@@ -212,3 +212,18 @@ describe("POST /api/customers — TC-CUS-01·02", () => {
     expect(prisma.customer.create).not.toHaveBeenCalled();
   });
 });
+
+// 덮는 TC: 없음(동순위 정렬은 명세에 TC 가 없다). 가장 가까운 것은 TC-CUS-03. (#95)
+describe("GET /api/customers — 동순위 보조 정렬 (#95)", () => {
+  it.each(["", "?sort=status,asc", "?sort=status,desc"])(
+    "쿼리 %s 와 무관하게 customerId desc 를 마지막 보조 키로 붙인다",
+    async (query) => {
+      await GET(asSalesRep(`${URL}${query}`));
+
+      const args = vi.mocked(prisma.customer.findMany).mock.calls[0][0];
+      const orderBy = args?.orderBy as Record<string, string>[];
+      expect(orderBy).toHaveLength(2);
+      expect(orderBy[1]).toEqual({ customerId: "desc" });
+    },
+  );
+});
