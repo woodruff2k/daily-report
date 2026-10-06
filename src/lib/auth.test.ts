@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
+import { JwtConfigError } from "@/lib/jwt";
 import { TEST_JWT_SECRET } from "@/test/integration/test-database";
 import {
   assertAnyRole,
@@ -89,6 +90,32 @@ describe("parseAuthContext", () => {
       () =>
         parseAuthContext(
           headers({ "x-user-rep-id": "1", "x-user-role": "ADMIN" }),
+        ),
+      401,
+    );
+  });
+
+  it("JWT_SECRET 이 없으면 401 이 아니라 설정 오류로 던진다 (#102 검토)", () => {
+    // 401 로 바꾸면 비밀이 주입되지 않은 배포가 "모든 토큰이 무효" 로 보이고 화면이
+    // 전원을 로그아웃시킨다. 명세 1.4 도 서버 오류를 권한 오류로 바꾸지 말라고 한다.
+    const token = signedWith(TEST_JWT_SECRET);
+    const saved = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = "";
+    try {
+      expect(() => parseAuthContext(bearer(token))).toThrow(JwtConfigError);
+    } finally {
+      process.env.JWT_SECRET = saved;
+    }
+  });
+
+  it("HS256 이 아닌 알고리즘으로 서명한 토큰은 401로 막는다 (#102)", () => {
+    // jsonwebtoken 9 는 alg=none 은 거부하지만 HS384·HS512 는 받아들인다. 지금은
+    // 비밀을 모르면 어떤 HS 로도 서명할 수 없어 악용 경로가 없지만, 검증이 받아들이는
+    // 집합을 발급이 만드는 것과 같게 고정해 둔다(jwt.ts 의 ALGORITHM).
+    expectHttpError(
+      () =>
+        parseAuthContext(
+          bearer(signedWith(TEST_JWT_SECRET, CLAIMS, { algorithm: "HS512" })),
         ),
       401,
     );

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { JwtConfigError } from "@/lib/jwt";
 
-vi.mock("@/lib/jwt", () => ({
+// `JwtConfigError` 는 실제 클래스를 보존한다. proxy 가 `instanceof` 로 설정 오류와
+// 토큰 오류를 가르므로, 목이 그 export 를 빼면 비교 자체가 터진다. (#102 검토)
+vi.mock("@/lib/jwt", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jwt")>()),
   verifyAccessToken: vi.fn(),
 }));
 
@@ -81,6 +85,15 @@ describe("proxy — TC-AUTH-04 토큰 없이 보호 API 호출", () => {
     expect((await errorBody(response))?.message).toBe(
       "유효하지 않은 토큰입니다.",
     );
+  });
+
+  it("설정 오류(JWT_SECRET 부재)는 401 로 바꾸지 않고 던진다 (#102 검토)", async () => {
+    // 401 로 바꾸면 비밀이 주입되지 않은 배포가 "모든 토큰이 무효" 로 보인다.
+    vi.mocked(verifyAccessToken).mockImplementation(() => {
+      throw new JwtConfigError("JWT_SECRET 환경 변수가 설정되지 않았습니다.");
+    });
+
+    await expect(proxy(bearer("/api/reports"))).rejects.toThrow(JwtConfigError);
   });
 
   it("검증 실패 응답에 내부 오류 메시지가 실리지 않는다", async () => {

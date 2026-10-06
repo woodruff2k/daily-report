@@ -17,7 +17,7 @@
 import type { Role } from "@/types/auth";
 import type { ReportStatus } from "@/types/report";
 import { AuthorizationError, ConflictError } from "./errors";
-import { verifyAccessToken } from "./jwt";
+import { JwtConfigError, verifyAccessToken } from "./jwt";
 
 function unauthorized(message: string): AuthorizationError {
   return new AuthorizationError("UNAUTHORIZED", message, 401);
@@ -83,7 +83,13 @@ export function parseAuthContext(headers: Headers): AuthContext {
   let payload;
   try {
     payload = verifyAccessToken(token);
-  } catch {
+  } catch (error) {
+    // 설정 오류(JWT_SECRET 부재)를 401 로 바꾸지 않는다. 바꾸면 비밀이 주입되지
+    // 않은 배포가 "모든 토큰이 무효" 로 보이고 화면이 전원을 로그아웃시킨다.
+    // 명세 1.4 도 분류되지 않은 서버 오류를 권한 오류로 바꾸지 말라고 적는다.
+    if (error instanceof JwtConfigError) {
+      throw error;
+    }
     throw unauthorized("유효하지 않은 토큰입니다.");
   }
 

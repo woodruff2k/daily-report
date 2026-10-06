@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyAccessToken } from "@/lib/jwt";
+import { JwtConfigError, verifyAccessToken } from "@/lib/jwt";
 import { prisma } from "@/lib/prisma";
 
 // 로그아웃은 공개 경로가 아니다. 토큰을 무효화하려면 누구의 토큰인지
@@ -54,7 +54,11 @@ export async function proxy(request: NextRequest) {
   let payload;
   try {
     payload = verifyAccessToken(token);
-  } catch {
+  } catch (error) {
+    // 설정 오류는 401 로 바꾸지 않고 던진다 — 그래야 500 으로 드러난다. (#102 검토)
+    if (error instanceof JwtConfigError) {
+      throw error;
+    }
     return unauthorized("유효하지 않은 토큰입니다.");
   }
 
