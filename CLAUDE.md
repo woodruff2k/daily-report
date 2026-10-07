@@ -79,3 +79,13 @@ API 를 구현·수정하기 전에 **반드시 읽는다**: `docs/영업일일�
 
 테스트를 작성하기 전에 **반드시 읽는다**: `docs/영업일일보고시스템_테스트명세서.md`
 TC 번호가 작업 단위다. 새 테스트는 어떤 TC 를 덮는지 주석에 적는다.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
