@@ -253,9 +253,43 @@ describe("POST /api/reports/{reportId}/comments — TC-CMT-01·02, TC-SEC-04", (
     expect(response.status).toBe(201);
   });
 
-  it("대댓글 작성 전에 부모 행을 잠근다 (동시 삭제와 직렬화)", async () => {
+  it("대댓글 작성 전에 보고 행과 부모 행을 잠근다 (동시 삭제와 직렬화)", async () => {
     await post({ content: "답글", parentCommentId: 400 });
+    // 보고 행(회수와 직렬화) + 부모 댓글 행(삭제와 직렬화)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it("TC-WDR-06: 인가 뒤 보고 행을 잠그고, 잠금 뒤에 다시 읽는다 (보고 회수와 직렬화)", async () => {
+    await post({ content: "루트" });
+
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const lock = vi.mocked(prisma.$queryRaw).mock.invocationCallOrder[0];
+    const reads = vi.mocked(prisma.dailyReport.findUnique).mock
+      .invocationCallOrder;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]);
+  });
+
+  it("TC-WDR-06: 잠금 뒤 읽기가 DRAFT 면(그 사이 회수) 409 REPORT_NOT_SUBMITTED", async () => {
+    vi.mocked(prisma.dailyReport.findUnique)
+      .mockReset()
+      .mockResolvedValueOnce(SUBMITTED_REPORT_ROW as never)
+      .mockResolvedValueOnce({
+        ...SUBMITTED_REPORT_ROW,
+        status: "DRAFT",
+      } as never);
+    const response = await post({ content: "루트" });
+
+    expect(response.status).toBe(409);
+    expect((await readBody(response)).error?.code).toBe("REPORT_NOT_SUBMITTED");
+    expect(prisma.reportComment.create).not.toHaveBeenCalled();
+  });
+
+  it("TC-SEC-04: 권한 없는 호출자는 보고 행을 잠그지 않는다", async () => {
+    expect((await post({ content: "내용" }, asOtherRep)).status).toBe(403);
+    expect((await post({ content: "내용" }, asSalesRep)).status).toBe(403);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 
   it("작성자 본인의 루트 댓글은 403 이다 (대댓글만 허용)", async () => {

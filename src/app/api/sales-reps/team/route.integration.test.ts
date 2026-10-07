@@ -1,10 +1,10 @@
 // 통합 테스트(실제 PostgreSQL). 팀원 Select 옵션(API 명세 6.7).
 // 덮는 항목: 직속만(다른 상급자·손자 제외), INACTIVE 포함, 빈 배열 200,
 // SALES_REP·ADMIN 403, 401, 최소 필드(NFR-04), repId 숫자, name asc,
-// 3.6 팀 보고 조회 범위와의 일치.
+// 3.7 팀 보고 조회 범위와의 일치.
 //
 // 덮는 TC: **6.7 은 테스트 명세서에 전용 TC 가 없다** — 이번에 추가한 절이다.
-// 범위 판정(직속 팀원)이 **TC-SEC-02**(팀 범위 밖 조회 차단, NFR-01/3.6)와
+// 범위 판정(직속 팀원)이 **TC-SEC-02**(팀 범위 밖 조회 차단, NFR-01/3.7)와
 // 같은 규칙이므로 그것을 참조로 적는다. 명세서에 절이 생기면 번호를 붙인다.
 import { describe, expect, it } from "vitest";
 import { GET } from "./route";
@@ -114,7 +114,7 @@ describe("GET /api/sales-reps/team (실제 DB)", () => {
     }
   });
 
-  it("목록의 모든 팀원을 3.6 팀 보고 조회에 repIds 로 넘기면 403 이 아니다", async () => {
+  it("목록의 모든 팀원을 3.7 팀 보고 조회에 repIds 로 넘기면 403 이 아니다", async () => {
     const manager = await createRep({ role: "MANAGER" });
     await createRep({ managerId: manager.repId });
     await createRep({ managerId: manager.repId, status: "INACTIVE" });

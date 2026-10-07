@@ -13,7 +13,11 @@ import {
 import { ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { mapCommentWriteError } from "@/lib/prisma-errors";
-import { REPORT_ROLES, assertReportViewable } from "@/lib/report";
+import {
+  REPORT_ROLES,
+  assertReportViewable,
+  lockReportShared,
+} from "@/lib/report";
 import { parseReportIdParam } from "@/lib/report-query";
 import { commentCreateSchema } from "@/schemas/comment";
 
@@ -83,16 +87,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const parentCommentId = rawParentId === null ? null : BigInt(rawParentId);
 
     const created = await prisma.$transaction(async (tx) => {
-      const report = await findReportForComment(tx, reportId);
+      const authorize = async () => {
+        const report = await findReportForComment(tx, reportId);
+        assertCanComment(
+          auth,
+          {
+            author: { repId: report.repId, managerId: report.rep.managerId },
+            status: report.status,
+          },
+          parentCommentId,
+        );
+      };
 
-      assertCanComment(
-        auth,
-        {
-          author: { repId: report.repId, managerId: report.rep.managerId },
-          status: report.status,
-        },
-        parentCommentId,
-      );
+      // 1) 인가 먼저. 권한 없는 호출자가 남의 보고 행에 잠금을 잡아 작성자의
+      //    저장·제출·회수를 막지 못하게 한다. (403·409 는 잠금 없이 끝난다)
+      await authorize();
+      // 2) 보고 행을 공유 잠금한다. 보고 회수(3.6)가 "댓글 0건" 을 세고 DRAFT 로
+      //    바꾸는 사이에 이 댓글이 끼어들지 못하게 한다. (이슈 #109)
+      await lockReportShared(tx, reportId);
+      // 3) 잠금 뒤 다시 읽어 재확인한다. READ COMMITTED 라 잠금 뒤의 읽기는 새
+      //    스냅샷이다. 기다리는 동안 회수로 DRAFT 가 되었거나 상급자 관계가 바뀌었을
+      //    수 있다.
+      await authorize();
 
       if (parentCommentId !== null) {
         await assertReplyParent(tx, reportId, parentCommentId);

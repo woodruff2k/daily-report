@@ -22,7 +22,7 @@ function parseDateParam(raw: string, field: string): Date {
 }
 
 /**
- * 기간·상태 필터. 본인 목록과 팀 목록이 공유한다. (API 명세 3.1, 3.6)
+ * 기간·상태 필터. 본인 목록과 팀 목록이 공유한다. (API 명세 3.1, 3.7)
  * 기간은 양끝을 포함한다.
  */
 function buildReportFilters(
@@ -72,7 +72,7 @@ export function buildReportWhere(
 }
 
 /**
- * `repIds` 쿼리 파라미터를 파싱한다. (API 명세 3.6)
+ * `repIds` 쿼리 파라미터를 파싱한다. (API 명세 3.7)
  *
  * 반복 형식(`?repIds=1&repIds=2`)과 콤마 구분(`?repIds=1,2`)을 모두 받고 섞어
  * 써도 된다. 화면·클라이언트 라이브러리마다 배열 직렬화가 달라 한쪽만 받으면
@@ -110,7 +110,7 @@ export function parseRepIdsParam(params: URLSearchParams): bigint[] {
 }
 
 /**
- * 팀 보고 목록의 조회 조건을 만든다. (API 명세 3.6)
+ * 팀 보고 목록의 조회 조건을 만든다. (API 명세 3.7)
  *
  * `repIds` 는 이미 `assertTeamScope` 를 통과한 배열이어야 한다. 이 함수는 범위를
  * 검증하지 않는다.

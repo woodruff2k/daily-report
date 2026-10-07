@@ -97,7 +97,7 @@ describe("assertReportViewable — TC-SEC-01", () => {
   });
 
   // 상태로 제한하지 않는다. SCR-300 의 검색 조건에 "작성중" 이 있고 API 명세
-  // 3.6 의 status 가 DRAFT 를 받으므로, 목록에 나온 보고를 열면 403 이 되는
+  // 3.7 의 status 가 DRAFT 를 받으므로, 목록에 나온 보고를 열면 403 이 되는
   // 상태를 만들지 않는다. 제출 여부로 갈리는 것은 댓글이다(assertCanComment).
   it("직속 상급자는 팀원의 작성중 보고도 볼 수 있다", () => {
     expect(() => assertReportViewable(manager, SUBMITTED_REPORT)).not.toThrow();
