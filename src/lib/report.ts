@@ -91,7 +91,7 @@ export function toReportListItem(record: ReportListRecord): ReportListItem {
 }
 
 /**
- * 팀 목록 레코드. 본인 목록과 달리 작성자를 담는다. (API 명세 3.6, SCR-300)
+ * 팀 목록 레코드. 본인 목록과 달리 작성자를 담는다. (API 명세 3.7, SCR-300)
  *
  * 작성자는 `repId`·`name` 만 읽는다. 이메일·사번은 팀 목록이 쓰지 않는다. (NFR-04)
  */
@@ -211,7 +211,7 @@ export interface ViewableReport {
  *
  * **작성자 본인 또는 직속 상급자다. 상태로 제한하지 않는다** — 상급자는 팀원의
  * 작성중 보고도 볼 수 있다. 화면정의서 SCR-300 의 검색 조건에 상태 "제출/작성중"
- * 이 있고 API 명세 3.6 의 `status` 파라미터도 DRAFT 를 받는다. 목록에 나오는 보고를
+ * 이 있고 API 명세 3.7 의 `status` 파라미터도 DRAFT 를 받는다. 목록에 나오는 보고를
  * 열면 403 이 되는 상태를 만들지 않는다. `auth.ts` 의 역할 표도 상급자 권한을
  * "직속 팀원 보고 조회(작성중 포함)" 로 적는다.
  *
@@ -259,6 +259,59 @@ export async function lockDraftReport(
       "제출된 보고는 수정할 수 없습니다.",
     );
   }
+}
+
+/**
+ * 보고 행을 잠그고 SUBMITTED 인지 다시 확인해 `data` 로 바꾼다. (API 명세 3.6 회수)
+ * 트랜잭션 안에서만 호출한다. `lockDraftReport` 의 반대 조건이다.
+ *
+ * `status = SUBMITTED` 조건이 걸린 UPDATE 는 행 잠금을 잡고 조건을 다시 평가하므로,
+ * 동시에 들어온 두 회수 중 하나만 전환하고 나머지는 0행(409)이 된다. 잠금은
+ * 트랜잭션이 끝날 때 풀린다.
+ *
+ * 전환했으면 `true`, 0행(이미 DRAFT)이면 `false` 다. 어떤 오류로 바꿀지는 호출 측이 정한다.
+ */
+export async function lockSubmittedReport(
+  tx: Prisma.TransactionClient,
+  reportId: bigint,
+  data: Prisma.DailyReportUpdateManyMutationInput,
+): Promise<boolean> {
+  const { count } = await tx.dailyReport.updateMany({
+    where: { reportId, status: "SUBMITTED" },
+    data: { updatedAt: new Date(), ...data },
+  });
+
+  return count > 0;
+}
+
+/**
+ * 보고 행에 공유 잠금(`FOR SHARE`)을 건다. 댓글 작성이 인가를 통과한 뒤, 상태를 **다시 읽기 전에** 호출한다.
+ * 트랜잭션 안에서만 호출한다. (이슈 #109)
+ *
+ * 회수(3.6)는 "댓글 0건" 을 세고 상태를 DRAFT 로 바꾼다. 댓글 작성은 "SUBMITTED"
+ * 를 읽고 댓글을 넣는다. 둘 다 READ COMMITTED 의 일반 읽기라서, 잠금 없이는
+ * 이렇게 엇갈린다.
+ *
+ * ```
+ * 댓글: status=SUBMITTED 읽음
+ * 회수: UPDATE → DRAFT, 댓글 수=0 (댓글 쪽은 미커밋이라 안 보인다), 커밋
+ * 댓글: INSERT, 커밋   → DRAFT 보고에 댓글이 달린다
+ * ```
+ *
+ * 댓글의 INSERT 가 FK 로 잡는 `FOR KEY SHARE` 는 회수의 UPDATE(`FOR NO KEY UPDATE`,
+ * 키 컬럼을 안 건드린다)와 충돌하지 않아 이 경합을 막지 못한다. `FOR SHARE` 는
+ * 충돌한다. 그래서 어느 쪽이 먼저든 직렬화된다.
+ * - 댓글이 먼저 잠그면 회수의 UPDATE 가 기다렸다가, 커밋된 댓글을 세어 409.
+ * - 회수가 먼저면 댓글의 잠금이 기다렸다가, 이후 읽기가 DRAFT 를 보고 409.
+ *   (READ COMMITTED 라 잠금 뒤의 읽기는 새 스냅샷이다. 그래서 상태 읽기는
+ *   반드시 이 호출 뒤여야 한다.)
+ * 댓글끼리는 `FOR SHARE` 가 서로 호환되어 동시 작성이 막히지 않는다.
+ */
+export async function lockReportShared(
+  tx: Prisma.TransactionClient,
+  reportId: bigint,
+): Promise<void> {
+  await tx.$queryRaw`SELECT report_id FROM daily_report WHERE report_id = ${reportId} FOR SHARE`;
 }
 
 /**

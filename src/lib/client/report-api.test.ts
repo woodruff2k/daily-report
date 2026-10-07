@@ -7,6 +7,7 @@ import {
   listReports,
   listTeamReports,
   reportErrorMessage,
+  withdrawReport,
 } from "./report-api";
 
 // 해당 TC 없음 — 화면이 서버에 보내는 질의 문자열과 오류 문장을 만드는 순수 로직이다.
@@ -104,6 +105,29 @@ describe("listTeamReports 질의 문자열", () => {
   });
 });
 
+describe("withdrawReport", () => {
+  it("TC-WDR-01: POST /api/reports/{id}/withdraw 를 부른다", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { reportId: 10, status: "DRAFT", submittedAt: null },
+          error: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(withdrawReport(10)).resolves.toEqual({
+      reportId: 10,
+      status: "DRAFT",
+      submittedAt: null,
+    });
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/reports/10/withdraw");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
+  });
+});
+
 describe("reportErrorMessage", () => {
   const error = (status: number, code: string, message = "서버 문장") =>
     new ApiClientError(status, { code, message });
@@ -112,6 +136,8 @@ describe("reportErrorMessage", () => {
     ["VISITS_REQUIRED", VISITS_REQUIRED_MESSAGE],
     ["REPORT_LOCKED", "제출된 보고는 수정할 수 없습니다."],
     ["REPORT_ALREADY_SUBMITTED", "이미 제출된 보고입니다."],
+    ["REPORT_HAS_COMMENTS", "댓글이 달린 보고는 회수할 수 없습니다."],
+    ["REPORT_NOT_SUBMITTED", "제출된 상태가 아니어서 회수할 수 없습니다."],
     [
       "CUSTOMER_NOT_FOUND",
       "선택한 고객을 찾을 수 없습니다. 고객을 다시 선택하세요.",

@@ -363,3 +363,301 @@ describe("SCR-220 — #93 보강", () => {
     },
   );
 });
+
+// 이슈 #109 SCR-220 [회수]. TC-WDR-08~13 (TC-WDR-01~07 의 화면 쪽).
+// 서버는 소프트 삭제된 댓글도 1건으로 센다. 목록이 삭제된 댓글을 `deleted: true`
+// 로 계속 돌려주므로 화면도 같은 기준(스레드가 하나라도 있으면 있음)이다.
+describe("SCR-220 [회수] — #109", () => {
+  const DELETED_ONLY = [
+    {
+      commentId: 401,
+      deleted: true,
+      parentCommentId: null,
+      createdAt: "2026-10-05T19:00:00+09:00",
+      replies: [],
+    },
+  ];
+
+  /** 상세·댓글을 상태에 따라 돌려주는 목. withdraw 성공 뒤 상세는 DRAFT 가 된다. */
+  function mockWithdraw(options: {
+    threads?: unknown[];
+    withdraw?: () => Response;
+  }) {
+    let withdrawn = false;
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input) => {
+        const url = new URL(String(input), "http://localhost");
+        if (url.pathname === "/api/reports/10/withdraw") {
+          const response =
+            options.withdraw?.() ??
+            ok({ reportId: 10, status: "DRAFT", submittedAt: null });
+          if (response.status === 200) withdrawn = true;
+          return Promise.resolve(response);
+        }
+        if (url.pathname === "/api/reports/10")
+          return Promise.resolve(
+            ok(
+              withdrawn
+                ? detail({ status: "DRAFT", submittedAt: null })
+                : detail(),
+            ),
+          );
+        if (url.pathname === "/api/reports/10/comments")
+          return Promise.resolve(ok(options.threads ?? []));
+        return Promise.resolve(fail(404, "NOT_FOUND"));
+      });
+    return fetchMock;
+  }
+
+  const withdrawCalls = (fetchMock: ReturnType<typeof mockWithdraw>) =>
+    fetchMock.mock.calls.filter(([input]) =>
+      String(input).endsWith("/withdraw"),
+    );
+
+  it("TC-WDR-08: 본인의 SUBMITTED 보고에 댓글이 0건이면 [회수] 가 보인다", async () => {
+    login(AUTHOR);
+    mockWithdraw({ threads: [] });
+    render(<ReportDetailPage />);
+
+    expect(await screen.findByRole("button", { name: "회수" })).toBeEnabled();
+  });
+
+  it("TC-WDR-09: 댓글 건수를 아직 모르면(목록 읽기 실패) 숨긴다", async () => {
+    login(AUTHOR);
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname === "/api/reports/10")
+        return Promise.resolve(ok(detail()));
+      return Promise.resolve(fail(500, "INTERNAL_ERROR"));
+    });
+    render(<ReportDetailPage />);
+
+    await screen.findByText("방문내용100");
+    await screen.findByText("댓글을 불러올 수 없습니다.");
+    expect(
+      screen.queryByRole("button", { name: "회수" }),
+    ).not.toBeInTheDocument();
+  });
+
+  describe("TC-WDR-09: [회수] 가 보이지 않는 경우", () => {
+    it("DRAFT 보고", async () => {
+      login(AUTHOR);
+      mockApi(undefined, detail({ status: "DRAFT", submittedAt: null }));
+      render(<ReportDetailPage />);
+      await screen.findByRole("button", { name: "수정" });
+      expect(
+        screen.queryByRole("button", { name: "회수" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("타인(직속 상급자)이 본 SUBMITTED 보고 — 댓글이 0건이어도", async () => {
+      login(MANAGER);
+      mockWithdraw({ threads: [] });
+      render(<ReportDetailPage />);
+      await screen.findByText("방문내용100");
+      await screen.findByText("댓글이 없습니다.");
+      expect(
+        screen.queryByRole("button", { name: "회수" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("댓글이 있는 보고", async () => {
+      login(AUTHOR);
+      mockWithdraw({ threads: THREADS });
+      render(<ReportDetailPage />);
+      await screen.findByText("견적 일정 확인 바람");
+      expect(
+        screen.queryByRole("button", { name: "회수" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("소프트 삭제된 댓글만 있는 보고 (서버가 1건으로 센다)", async () => {
+      login(AUTHOR);
+      mockWithdraw({ threads: DELETED_ONLY });
+      render(<ReportDetailPage />);
+      await screen.findByText("삭제된 댓글입니다");
+      expect(
+        screen.queryByRole("button", { name: "회수" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("TC-WDR-10: [회수] → 확인 → POST 후 상세를 다시 읽어 [수정] 이 보이고 [회수] 는 사라진다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    const fetchMock = mockWithdraw({ threads: [] });
+    render(<ReportDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    // 확인 전에는 호출하지 않는다.
+    expect(withdrawCalls(fetchMock)).toHaveLength(0);
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "회수 확인" }));
+
+    expect(await screen.findByRole("button", { name: "수정" })).toBeVisible();
+    expect(screen.getByText("상태: 작성중")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "회수" }),
+    ).not.toBeInTheDocument();
+    expect(withdrawCalls(fetchMock)).toHaveLength(1);
+    expect(withdrawCalls(fetchMock)[0][1]).toMatchObject({ method: "POST" });
+    // SCR-210 으로 보내지 않는다 — 이 화면에서 상태만 바뀐다.
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("TC-WDR-11: 확인 창에서 취소하면 호출하지 않고 [회수] 가 남는다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    const fetchMock = mockWithdraw({ threads: [] });
+    render(<ReportDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "취소" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(withdrawCalls(fetchMock)).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "회수" })).toBeInTheDocument();
+  });
+
+  it("TC-WDR-12: 409 REPORT_HAS_COMMENTS 이면 문구를 보이고 댓글을 다시 읽어 [회수] 가 사라진다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    // 화면이 0건으로 알았는데 그 사이 상급자가 댓글을 달았다.
+    let commented = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname === "/api/reports/10/withdraw") {
+        commented = true;
+        return Promise.resolve(fail(409, "REPORT_HAS_COMMENTS"));
+      }
+      if (url.pathname === "/api/reports/10")
+        return Promise.resolve(ok(detail()));
+      if (url.pathname === "/api/reports/10/comments")
+        return Promise.resolve(ok(commented ? THREADS : []));
+      return Promise.resolve(fail(404, "NOT_FOUND"));
+    });
+    render(<ReportDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "회수 확인",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "댓글이 달린 보고는 회수할 수 없습니다.",
+    );
+    expect(await screen.findByText("견적 일정 확인 바람")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "회수" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("상태: 제출")).toBeInTheDocument();
+  });
+
+  it("TC-WDR-13: 409 REPORT_NOT_SUBMITTED 는 안내 문구를 보인다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    mockWithdraw({
+      threads: [],
+      withdraw: () => fail(409, "REPORT_NOT_SUBMITTED"),
+    });
+    render(<ReportDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "회수 확인",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "제출된 상태가 아니어서 회수할 수 없습니다.",
+    );
+  });
+
+  it("TC-WDR-13: 403 은 서버가 준 문장을 보인다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    mockWithdraw({ threads: [], withdraw: () => fail(403, "FORBIDDEN") });
+    render(<ReportDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "회수 확인",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("서버 문장");
+  });
+
+  /** 회수 성공 뒤 상세 재조회를 제어하는 목. 첫 GET 은 SUBMITTED, 이후는 refetch 가 정한다. */
+  function mockRefetch(refetch: () => Promise<Response>) {
+    let gets = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname === "/api/reports/10/withdraw")
+        return Promise.resolve(
+          ok({ reportId: 10, status: "DRAFT", submittedAt: null }),
+        );
+      if (url.pathname === "/api/reports/10") {
+        gets += 1;
+        return gets === 1 ? Promise.resolve(ok(detail())) : refetch();
+      }
+      if (url.pathname === "/api/reports/10/comments")
+        return Promise.resolve(ok([]));
+      return Promise.resolve(fail(404, "NOT_FOUND"));
+    });
+  }
+
+  async function clickWithdraw(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("button", { name: "회수" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "회수 확인",
+      }),
+    );
+  }
+
+  it("TC-WDR-14: 성공 직후 재조회가 끝나기 전에도 DRAFT 로 보이고 [회수] 는 다시 나타나지 않는다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    let release!: (r: Response) => void;
+    mockRefetch(() => new Promise<Response>((resolve) => (release = resolve)));
+    render(<ReportDetailPage />);
+
+    await clickWithdraw(user);
+
+    // 재조회는 아직 대기 중이다.
+    expect(await screen.findByText("상태: 작성중")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "수정" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "회수" }),
+    ).not.toBeInTheDocument();
+    release(ok(detail({ status: "DRAFT", submittedAt: null })));
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("TC-WDR-15: 회수 성공 뒤 재조회가 실패해도 상세를 유지하고 안내만 붙인다", async () => {
+    const user = userEvent.setup();
+    login(AUTHOR);
+    mockRefetch(() => Promise.resolve(fail(500, "INTERNAL_ERROR")));
+    render(<ReportDetailPage />);
+
+    await clickWithdraw(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("회수했습니다.");
+    expect(screen.getByText("방문내용100")).toBeInTheDocument();
+    expect(screen.getByText("상태: 작성중")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "수정" })).toBeVisible();
+    expect(
+      screen.queryByText("보고를 불러올 수 없습니다."),
+    ).not.toBeInTheDocument();
+  });
+});

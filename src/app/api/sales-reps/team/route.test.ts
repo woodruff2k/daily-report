@@ -3,7 +3,7 @@
 // 최소 필드(NFR-04). 실제 DB 의 직속 범위는 route.integration.test.ts 가 지킨다.
 //
 // 덮는 TC: **6.7 은 테스트 명세서에 전용 TC 가 없다** — 이번에 추가한 절이다.
-// 범위 판정(직속 팀원)이 **TC-SEC-02**(팀 범위 밖 조회 차단, NFR-01/3.6)와
+// 범위 판정(직속 팀원)이 **TC-SEC-02**(팀 범위 밖 조회 차단, NFR-01/3.7)와
 // 같은 규칙이므로 그것을 참조로 적는다. 명세서에 절이 생기면 번호를 붙인다.
 import { NextRequest } from "next/server";
 import { bearerHeaders } from "@/test/auth-headers";

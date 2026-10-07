@@ -8,7 +8,7 @@ import { toSalesRepTeamOption } from "@/lib/sales-rep";
  * 팀원 Select 옵션. (SCR-300 팀원 다중 선택, API 명세 6.7)
  *
  * 6.6(`/options`)과 따로 둔 이유: 6.6 은 전사 활성 사원을 주므로 팀원이 아닌 사람을
- * 고를 수 있고, 고르면 팀 보고 조회(3.6)의 `assertTeamScope` 가 403 을 준다.
+ * 고를 수 있고, 고르면 팀 보고 조회(3.7)의 `assertTeamScope` 가 403 을 준다.
  * 6.1 은 관리자 전용이라 상급자가 부를 수 없다.
  *
  * **범위는 `reports/team` 이 팀원을 구하는 조건과 같아야 한다.** 직속(`managerId`)

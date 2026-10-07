@@ -43,7 +43,7 @@ export function listReports(filters: ReportFilters = {}) {
   );
 }
 
-/** 팀 보고 목록 항목. 본인 목록에 작성자가 더해진다. (API 명세 3.6) */
+/** 팀 보고 목록 항목. 본인 목록에 작성자가 더해진다. (API 명세 3.7) */
 export interface TeamReportListItem extends ReportListItem {
   rep: { repId: number; name: string };
 }
@@ -159,6 +159,18 @@ export function submitReport(reportId: number) {
   }>(`/api/reports/${reportId}/submit`, { method: "POST" });
 }
 
+/**
+ * 제출한 보고를 회수한다. (API 명세 3.6) 작성자 본인만, 댓글이 없을 때만 된다.
+ * 이미 DRAFT 면 409 `REPORT_NOT_SUBMITTED`, 댓글이 있으면 409 `REPORT_HAS_COMMENTS`.
+ */
+export function withdrawReport(reportId: number) {
+  return apiFetch<{
+    reportId: number;
+    status: ReportStatus;
+    submittedAt: null;
+  }>(`/api/reports/${reportId}/withdraw`, { method: "POST" });
+}
+
 /** 같은 일자의 보고가 이미 있을 때 서버가 주는 409 코드. */
 export const REPORT_ALREADY_EXISTS = "REPORT_ALREADY_EXISTS";
 
@@ -190,6 +202,10 @@ const CODE_MESSAGE: Record<string, string> = {
   VISITS_REQUIRED: VISITS_REQUIRED_MESSAGE,
   REPORT_LOCKED: "제출된 보고는 수정할 수 없습니다.",
   REPORT_ALREADY_SUBMITTED: "이미 제출된 보고입니다.",
+  REPORT_HAS_COMMENTS: "댓글이 달린 보고는 회수할 수 없습니다.",
+  // 회수 시 이미 DRAFT 인 보고(다른 탭에서 회수했거나 처음부터 작성중). 이 코드를
+  // 돌려주는 보고 엔드포인트는 회수뿐이다(댓글은 commentErrorMessage 가 따로 가진다).
+  REPORT_NOT_SUBMITTED: "제출된 상태가 아니어서 회수할 수 없습니다.",
   CUSTOMER_NOT_FOUND: "선택한 고객을 찾을 수 없습니다. 고객을 다시 선택하세요.",
   NOT_FOUND: "보고를 찾을 수 없습니다.",
 };

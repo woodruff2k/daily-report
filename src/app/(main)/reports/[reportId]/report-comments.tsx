@@ -33,6 +33,13 @@ interface Props {
   authorRepId: number;
   /** 댓글은 SUBMITTED 보고에만 달린다. DRAFT 면 서버가 409 로 막는다. */
   submitted: boolean;
+  /**
+   * 목록을 읽을 때마다 알린다. 댓글이 1건 이상이면 true(소프트 삭제된 댓글 포함),
+   * 없으면 false, 목록을 읽지 못했으면 null. 목록 API 는 페이지네이션이 없어
+   * 응답이 곧 전체다(API 명세 4.1) — 스레드가 하나라도 있으면 댓글이 있고,
+   * 삭제된 댓글도 스레드에 남는다. 건수가 아니라 유무만 알린다.
+   */
+  onLoaded?: (hasComments: boolean | null) => void;
 }
 
 /**
@@ -49,7 +56,12 @@ interface Props {
  * 조직 구조를 새로 노출하지 않고도 맞게 갈린다. **이것은 접근통제가 아니다.**
  * 입력창을 가려도, 우회해서 호출해도 서버가 403 으로 다시 막는다.
  */
-export function ReportComments({ reportId, authorRepId, submitted }: Props) {
+export function ReportComments({
+  reportId,
+  authorRepId,
+  submitted,
+  onLoaded,
+}: Props) {
   const toMessage = useApiErrors(commentErrorMessage);
   // 하이드레이션: 저장소 값은 초기 상태가 아니라 효과 안에서 읽는다.
   const [myRepId, setMyRepId] = useState<number | null>(null);
@@ -82,12 +94,14 @@ export function ReportComments({ reportId, authorRepId, submitted }: Props) {
       if (ticket !== latest.current) return;
       setThreads(data);
       setLoadError(null);
+      onLoaded?.(data.length > 0);
     } catch (caught) {
       if (ticket !== latest.current) return;
       setThreads(null);
       setLoadError(toMessage(caught, "댓글을 불러올 수 없습니다."));
+      onLoaded?.(null);
     }
-  }, [reportId, toMessage]);
+  }, [reportId, toMessage, onLoaded]);
 
   useEffect(() => {
     // 효과 본문에서 동기 setState 를 피하려고 한 틱 뒤에 부른다(react-hooks/set-state-in-effect).
